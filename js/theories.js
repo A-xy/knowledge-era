@@ -1,0 +1,718 @@
+const theoryData = {
+    theory1:{
+        name:"基础理论",
+        cost:new Decimal(10),
+        // 该理论独立的升级价格参数(不填则用全局默认值)
+        price:{
+            BASE: 100,
+            A: 2,
+            B: 1,
+            N: 5
+        }
+    },
+    theory2:{
+        name:"物质理论",
+        cost:new Decimal(100),
+        price:{
+            BASE: 1e3,
+            A: 3,
+            B: 1,
+            N: 5
+        }
+    },
+    theory3:{
+        name:"能量理论",
+        cost:new Decimal(10000),
+        price:{
+            BASE: 1e7,
+            A: 4,
+            B: 1,
+            N: 5
+        }
+    },
+    theory4:{
+        name:"宇宙理论",
+        cost:new Decimal("1e8"),
+        price:{
+            BASE: 1e12,
+            A: 5,
+            B: 1,
+            N: 5
+        }
+    },
+    theory5:{
+        name:"终极理论",
+        cost:new Decimal("1e13"),
+        price:{
+            BASE: 1e18,
+            A: 6,
+            B: 1,
+            N: 5
+        }
+    }
+};
+
+
+// ============================================================
+// 升级价格默认参数(全局兜底值)
+// 注意:游戏里 level 从 0 开始(第一级 = level 0)
+// Price(level) = BASE * 10^(A*level + B*max(level-N, 0)^2)
+// 低等级按指数增长(每级约 ×10^A);超过 N 级后叠加二次项,
+// 价格快速陡增,抑制"购买最大"导致的等级爆炸。
+// - BASE: 基础价格倍数(level 0 时价格 = BASE,默认 10 与原版一致)
+// - A:    线性指数系数,每升 1 级价格约 ×10^A
+// - B:    二次项系数,超过 N 级后价格加速增长(越大越难升级)
+// - N:    二次项生效的起始等级阈值(level > N 后开始加速)
+//
+// 注意:每个理论可以在 theoryData 中单独配置自己的 price 参数
+// (见下方 theoryData 各理论的 price 字段),未配置的理论使用这里的默认值。
+// ============================================================
+const DEFAULT_UPGRADE_PRICE = {
+    BASE: 10,   // 基础价格倍数(level 0 时价格 = 10)
+    A: 1,       // 线性指数系数:每升 1 级价格约 ×10^A
+    B: 0.05,    // 二次项系数:超过 N 级后价格加速增长
+    N: 100      // 二次项生效的起始等级阈值(level > N 后开始加速)
+};
+
+
+// 获取某个理论的价格参数(未单独配置时用全局默认值)
+function getTheoryPrice(id){
+    let data =
+    theoryData[id];
+
+    return (data && data.price)
+    ? data.price
+    : DEFAULT_UPGRADE_PRICE;
+}
+
+
+// 价格指数 f(x,p) = p.A*x + p.B*max(x-p.N,0)^2
+// 实验4(exp4Effect)使二次项起始点延后:N 变大 → 价格膨胀延后
+function priceExponent(x, p){
+    let over = Math.max(x - (p.N + exp4Effect()), 0);
+    return p.A * x + p.B * over * over;
+}
+
+
+// 理论升级价格:Price(level) = BASE * 10^f(level)
+// level 从 0 开始(第一级 = level 0),所以直接代入 level
+// 每个理论使用自己独立的 price 参数
+function theoryUpgradeCost(id){
+    let t =
+    game.theories[id];
+
+    let p =
+    getTheoryPrice(id);
+
+    let exp =
+    priceExponent(t.level, p);
+
+    return new Decimal(p.BASE)
+    .mul(
+        Decimal.pow(10, exp)
+    );
+}
+
+
+// 判断理论是否应该显示
+function theoryVisible(id){
+    let num =
+    Number(
+        id.replace("theory","")
+    );
+
+    //理论1默认显示
+    if(num===1)
+        return true;
+
+    //其他理论需要前置理论解锁
+    return game.theories[
+        "theory"+(num-1)
+    ].unlocked;
+}
+
+
+// 解锁理论
+function unlockTheory(id){
+    let t =
+    game.theories[id];
+
+    let data =
+    theoryData[id];
+
+    if(t.unlocked)
+        return;
+
+    if(game.knowledge.gte(data.cost)){
+
+        game.knowledge =
+        game.knowledge.sub(data.cost);
+
+        t.unlocked=true;
+
+        //理论力量初始为1
+        t.power =
+        new Decimal(1);
+
+        renderTheories();
+
+    }
+}
+
+
+// 升级理论
+function upgradeTheory(id){
+    let t =
+    game.theories[id];
+
+    if(!t.unlocked)
+        return;
+
+    //升级价格
+    let cost =
+    theoryUpgradeCost(id);
+
+    if(game.knowledge.gte(cost)){
+
+        game.knowledge =
+        game.knowledge.sub(cost);
+
+        t.level++;
+
+        renderTheories();
+
+    }
+}
+
+
+// 购买最大:对所有已解锁理论尝试购买最大数量
+// 购买最大:先解锁所有可解锁的理论,再逐级升级已解锁理论
+function buyMaxTheories(){
+
+    // 第一步:解锁所有当前可解锁的理论
+    for(let i = 1; i <= 5; i++){
+
+        let id =
+        "theory" + i;
+
+        let t =
+        game.theories[id];
+
+        if(t && !t.unlocked && theoryVisible(id)){
+            unlockTheory(id);
+        }
+
+    }
+
+    // 第二步:升级已解锁理论
+    for(let id in game.theories){
+
+        let t =
+        game.theories[id];
+
+        if(!t.unlocked)
+            continue;
+
+        // 每级价格由 theoryUpgradeCost 计算,逐级购买直到知识不足
+        let guard = 0;
+        let cost =
+        theoryUpgradeCost(id);
+
+        while(game.knowledge.gte(cost)){
+
+            game.knowledge =
+            game.knowledge.sub(cost);
+
+            t.level++;
+
+            cost =
+            theoryUpgradeCost(id);
+
+            guard++;
+            if(guard > 100000) break; // 安全保护
+        }
+
+    }
+
+    renderTheories();
+
+}
+
+
+// 理论力量每秒增长量
+// 基础值 = 0.1 * 升级倍率^level,再乘以元-力量加成 (1 + metaPower)
+// 升级倍率:
+//   默认 = 2
+//   效果2(upgradeRate)解锁后 = 2 + 0.2 * ln(MetaPower + 1)
+// 公式统一在 ideas.js 的 metaUpgradeRate()/metaPowerBonus()
+function theoryPowerGain(id){
+    let t =
+    game.theories[id];
+
+    if(!t.unlocked)
+        return new Decimal(0);
+
+    // 升级倍率:效果2(upgradeRate)解锁后随 MetaPower 增长
+    let rate =
+    isEffectUnlocked("upgradeRate")
+    ? metaUpgradeRate()
+    : new Decimal(2);
+
+    let base =
+    new Decimal(0.1)
+    .mul(
+        Decimal.pow(
+            rate,
+            t.level
+        )
+    );
+
+    // 元-力量效果1:理论力量 ×(1+MetaPower)^实验指数
+    // metaPowerBonus() 已包含实验指数(默认 1.0,实验提交提升后升高)
+    let result =
+    base.mul(metaPowerBonus());
+
+    // 研究里程碑 stage1:所有理论力量获取 ×(1 + 研究重置次数,最大10)
+    if(isMilestoneActive("stage1")){
+        result =
+        result.mul(
+            researchPowerBonus()
+        );
+    }
+
+    // 多次完成实验4:所有理论力量生产 × completions^2(≥2 生效)
+    result =
+    result.mul(
+        exp4CompletionBonus()
+    );
+
+    return result;
+}
+
+
+// 更新理论力量
+function updateTheoryPower(dt){
+    for(let id in game.theories){
+
+        let t =
+        game.theories[id];
+
+        if(t.unlocked){
+
+            t.power =
+
+            t.power.add(
+                theoryPowerGain(id).mul(dt)
+            );
+
+        }
+
+    }
+}
+
+
+// ============================================================
+// 知识边界(软上限)
+// 游戏后期的知识获取速度可超过 1.79e308/s(JS number 上限,
+// 一些增量游戏称其为"无限")。超过边界后知识生产受软上限限制:
+//   capped = 1.79e308 * sqrt(speed / 1.79e308)
+// 该计算在各种加成之后进行,结果为最终显示的知识获取速度。
+// ============================================================
+const KNOWLEDGE_LIMIT =
+new Decimal("1.79e308");
+
+
+// 原始知识速度是否已超越边界(用于显示"已超越边界"提示)
+function knowledgeBeyondLimit(speed){
+    return speed.gt(KNOWLEDGE_LIMIT);
+}
+
+
+// 知识边界软上限(输入原始速度,返回受限后的最终速度)
+function knowledgeSoftCap(speed){
+    if(!knowledgeBeyondLimit(speed))
+        return speed;
+    return KNOWLEDGE_LIMIT.mul(
+        speed.div(KNOWLEDGE_LIMIT).sqrt()
+    );
+}
+
+
+// 软上限使知识生产除以的倍数 = 原始速度 / 受限后速度
+// 未超限时为 1(÷1,不受影响);超限后为 sqrt(raw/LIMIT)(>1)
+function knowledgeCapDivisor(){
+    let raw = knowledgeRawSpeed();
+    let capped = knowledgeSoftCap(raw);
+    return raw.div(capped);
+}
+
+
+// 计算原始知识速度(各种加成之后、软上限之前)
+// 里程碑 stage1 解锁后:知识获取 ×(1 + 研究重置次数,最大10)
+function knowledgeRawSpeed(){
+    let speed =
+    new Decimal(1);
+
+    for(let id in game.theories){
+
+        let t =
+        game.theories[id];
+
+        if(t.unlocked){
+
+            speed =
+            speed.mul(
+                t.power
+            );
+
+        }
+
+    }
+
+    // 研究里程碑 stage1:知识获取加成
+    if(isMilestoneActive("stage1")){
+        speed =
+        speed.mul(
+            researchPowerBonus()
+        );
+    }
+
+    return speed;
+}
+
+
+// 计算知识速度(最终显示值,已应用知识边界软上限)
+function getKnowledgeSpeed(){
+    return knowledgeSoftCap(
+        knowledgeRawSpeed()
+    );
+}
+
+
+// 绘制理论界面
+// 采用增量渲染:卡片只在状态(解锁/等级)变化时才重建,
+// 数值变化只更新文本,避免每帧重建按钮导致点击事件丢失
+function renderTheories(){
+
+    // 购买最大按钮:理论5解锁后显示;研究里程碑 stage1 后始终可用
+    let buyBtn =
+    document.getElementById(
+        "buyMaxBtn"
+    );
+
+    if(buyBtn){
+        buyBtn.style.display =
+        ((game.theories.theory5 && game.theories.theory5.unlocked)
+        || isMilestoneActive("stage1"))
+        ? "block" : "none";
+    }
+
+    let box =
+    document.getElementById(
+        "theories"
+    );
+
+    // 当前应显示的理论 id 列表
+    let visibleIds = [];
+
+    for(let id in game.theories){
+
+        if(theoryVisible(id))
+            visibleIds.push(id);
+
+    }
+
+    // 移除已不再显示的理论卡片
+    for(let i = box.children.length - 1; i >= 0; i--){
+
+        let child = box.children[i];
+
+        if(!visibleIds.includes(child.dataset.theory)){
+            child.remove();
+        }
+
+    }
+
+    for(let id of visibleIds){
+
+        let t =
+        game.theories[id];
+
+        let data =
+        theoryData[id];
+
+        let div =
+        document.getElementById(
+            "theory-"+id
+        );
+
+        //==================
+        // 未解锁
+        //==================
+        if(!t.unlocked){
+
+            // 卡片已存在且状态未变,无需重建
+            if(div && div.dataset.mode === "locked")
+                continue;
+
+            if(!div){
+                div = document.createElement("div");
+                div.id = "theory-"+id;
+                div.dataset.theory = id;
+                box.appendChild(div);
+            }
+
+            div.dataset.mode = "locked";
+
+            div.innerHTML = `
+
+            <h3>
+            ${data.name}
+            </h3>
+
+            <span class="cost">
+            解锁需要：
+            ${format(data.cost)}
+            </span>
+
+            <button data-theory="${id}" data-action="unlock">
+
+            学习理论
+
+            </button>
+
+            `;
+
+        }
+
+        //==================
+        // 已解锁
+        //==================
+        else{
+
+            let upgradeCost =
+
+            theoryUpgradeCost(id);
+
+            let gain =
+            theoryPowerGain(id);
+
+            // 卡片已存在且等级未变,只更新力量/生产速度文本,不重建按钮
+            if(div && div.dataset.mode === "upgraded" && Number(div.dataset.level) === t.level){
+
+                let p = div.querySelector(".power-val");
+                if(p)
+                    p.innerText = format(t.power) + " (+" + format(gain) + "/秒)";
+
+                continue;
+            }
+
+            if(!div){
+                div = document.createElement("div");
+                div.id = "theory-"+id;
+                div.dataset.theory = id;
+                box.appendChild(div);
+            }
+
+            div.dataset.mode = "upgraded";
+            div.dataset.level = t.level;
+
+            div.innerHTML = `
+
+            <h3>
+            ${data.name}
+            </h3>
+
+            <span class="power">
+            力量：
+            <span class="power-val">${format(t.power)} (+${format(gain)}/秒)</span>
+            </span>
+
+            <span class="level">
+            Lv.${t.level}
+            </span>
+
+            <span class="cost">
+            升级：
+            ${format(upgradeCost)}
+            </span>
+
+            <button data-theory="${id}" data-action="upgrade">
+
+            升级
+
+            </button>
+
+            `;
+
+        }
+
+    }
+
+}
+
+
+// 事件委托:所有理论按钮的点击统一由容器处理
+// 同时监听 mousedown,保证即使按钮正在被刷新也能立刻响应
+(function(){
+
+    let box =
+    document.getElementById(
+        "theories"
+    );
+
+    function handle(e){
+
+        let btn = e.target.closest("button[data-theory]");
+        if(!btn) return;
+
+        let id = btn.dataset.theory;
+        let action = btn.dataset.action;
+
+        if(action === "unlock")
+            unlockTheory(id);
+
+        else if(action === "upgrade")
+            upgradeTheory(id);
+
+    }
+
+    box.addEventListener("mousedown", handle);
+    box.addEventListener("click", handle);
+
+})();
+
+
+// ============================================================
+// 键盘操作(仅理论页可见时)
+//   数字键 1~5:购买对应理论(未解锁则解锁,已解锁则升级一次)
+//   M 键:购买全部最大;按住 M 持续生效
+// ============================================================
+
+// 理论页当前是否可见(游戏界面显示中 + 知识页为激活页)
+function theoryPageVisible(){
+
+    let gameScreen =
+    document.getElementById(
+        "gameScreen"
+    );
+
+    if(!gameScreen
+        || gameScreen.style.display !== "block")
+        return false;
+
+    let page =
+    document.getElementById(
+        "knowledgePage"
+    );
+
+    return !!page
+    && page.style.display !== "none";
+
+}
+
+
+// 按键购买对应理论(数字 1~5 → theory1~5)
+function buyTheoryByKey(num){
+
+    if(num < 1 || num > 5)
+        return;
+
+    let id =
+    "theory" + num;
+
+    let t =
+    game.theories[id];
+
+    if(!t)
+        return;
+
+    // 未解锁但可见 → 解锁;已解锁 → 升级一次
+    if(!t.unlocked){
+        if(theoryVisible(id))
+            unlockTheory(id);
+    }else{
+        upgradeTheory(id);
+    }
+
+}
+
+
+// M 键按住时持续购买最大(100ms 一次)
+let holdMBuyTimer = null;
+
+function stopHoldBuyMax(){
+    if(holdMBuyTimer){
+        clearInterval(holdMBuyTimer);
+        holdMBuyTimer = null;
+    }
+}
+
+
+(function(){
+
+    // 模拟器等环境可能无 document.addEventListener(不影响浏览器)
+    if(!document.addEventListener)
+        return;
+
+    // 仅在理论页可见时响应键盘
+    document.addEventListener("keydown", function(e){
+
+        if(!theoryPageVisible())
+            return;
+
+        // 防止输入框内误触
+        let tag =
+        (e.target && e.target.tagName)
+        ? e.target.tagName.toLowerCase()
+        : "";
+
+        if(tag === "input" || tag === "textarea")
+            return;
+
+        // 数字键 1~5 → 购买对应理论
+        if(e.key >= "1" && e.key <= "5"){
+
+            e.preventDefault();
+
+            buyTheoryByKey(
+                Number(e.key)
+            );
+
+            return;
+
+        }
+
+        // M / m → 购买最大(按住持续生效)
+        if(e.key === "m" || e.key === "M"){
+
+            e.preventDefault();
+
+            if(holdMBuyTimer)
+                return; // 已在持续中
+
+            buyMaxTheories();
+
+            holdMBuyTimer =
+            setInterval(
+                buyMaxTheories,
+                100
+            );
+
+        }
+
+    });
+
+    document.addEventListener("keyup", function(e){
+
+        if(e.key === "m" || e.key === "M")
+            stopHoldBuyMax();
+
+    });
+
+    // 页面失焦时停止按住购买,避免后台空转
+    document.addEventListener("blur", function(){
+        stopHoldBuyMax();
+    });
+
+})();

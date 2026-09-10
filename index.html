@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="3W0x9nhceJtWlDC8wFoCFh">
+
+<head data-page-node-id="H2WxZ5UZx4Zxb1bjIzYMqT">
+
+<meta charset="UTF-8" data-page-node-id="c0bb3DVieAZ7ToEFGvlayv">
+
+<title>知识纪元</title>
+
+<link rel="stylesheet" href="css/style.css" data-page-node-id="mEObvDiV1A72E6nuO1oReN">
+
+</head>
+
+
+<body data-page-node-id="cV1UMZTiOhuKFDPPMRaQTL">
+
+
+<div id="storyScreen" data-page-node-id="XZjTI8DcmFJtCXbqDF2jwE">
+
+<div id="storyText" data-page-node-id="SGpczVbGxjuIWHovcfafuk">
+</div>
+
+<button id="storyNextBtn" onclick="event.stopPropagation(); nextStory()" data-page-node-id="TsCKkP3opRQgPS07h0Brvn">
+点击继续
+</button>
+
+</div>
+
+
+
+<div id="gameScreen" data-page-node-id="UQi48SgEViKu9Q331YOaFP">
+
+<h1 data-page-node-id="wrov4Rn2oj5ItM4EuzDCsG">知识纪元</h1>
+
+<div id="debugInfo" style="display:none" data-page-node-id="m87WqJCQinLgE3n6NdpBCm"></div>
+
+<div id="pageNav" data-page-node-id="yHGVEeotJQAiBsa7xyYLgl">
+<button class="nav-btn active" data-page="knowledge" data-page-node-id="ro1QyWnyWOP5oZUBu9PFbE">知识</button>
+<button class="nav-btn" data-page="idea" data-page-node-id="vxINfC8Ex9HXSsrI74noBj">想法</button>
+<button class="nav-btn" data-page="research" id="researchNavBtn" style="display:none" data-page-node-id="EofktiZXbwabe8LhEZaFw1">研究</button>
+<button class="nav-btn" data-page="time" data-page-node-id="kxYE7GXPCXW0QqA8ygAFnF">时间</button>
+<button class="nav-btn" data-page="achievement" data-page-node-id="n92KJ4B50eZXCr8iUf5A7I">成就</button>
+<button class="nav-btn" data-page="stats" data-page-node-id="A2lES85hIiAEfMAuGe9vEL">统计</button>
+<button class="nav-btn" data-page="save" data-page-node-id="rNDkHxqAlfSyN6Ky9Tl6Et">存档</button>
+<button class="nav-btn" data-page="about">关于</button>
+</div>
+
+<div id="offlineNotice" style="display:none" data-page-node-id="3896YDn9A7WHHyNqPYIrnP"></div>
+
+<div id="achvToast" style="display:none" data-page-node-id="VKaM5oEtsggFArzcvF8rOH"></div>
+
+
+<div id="knowledgePage" data-page-node-id="PAJJmXq9SSODoLWJ2rnIMp">
+
+
+<div class="knowledge" data-page-node-id="ZgmC2BB1RXGEQ8b74m1lHG">
+
+你学习了
+
+<span id="knowledge" data-page-node-id="NjH1QpP28HciOM4Lvjvws0">
+0
+</span>
+
+知识
+
+</div>
+
+
+<div data-page-node-id="Jg8DvrJTV4pG7Ux3DD7Fps">
+
+知识获取速度：
+
+<span id="kps" data-page-node-id="y0LpUW835UiuTcqImhAhw9">
+0
+</span>
+/秒
+
+</div>
+
+<div id="knowledgeLimit" style="display:none" class="knowledge-limit" data-page-node-id="wOOiz1TCNKmRRaHdrmEHLE">
+
+你已超越人类知识的边界。超过边界(<span id="knowledgeLimitVal" data-page-node-id="oezpbmMC0GPSOrRqgvv0so">1.79e308</span>/s)的知识生产将受软上限限制。
+
+</div>
+
+
+<hr data-page-node-id="gXkajqAi2EQWfFn2fybq3C">
+
+
+<h2 data-page-node-id="pUnwKiL9bPbeumzMGZ4Bpk">理论研究</h2>
+
+<button id="buyMaxBtn" style="display:none" onclick="buyMaxTheories()" data-page-node-id="vITWX7kMbUHugrbQHHLMFj">购买最大</button>
+
+<div id="theories" data-page-node-id="Hjr7pzIG4x1BbPyJ4CbIkn">
+
+</div>
+
+<p class="research-hint" data-page-node-id="UAkOWBbrj3QwgThfa8rghB">
+按1~5键可以购买对应理论,按M键购买全部最大。
+</p>
+
+</div>
+
+
+<div id="ideaPage" style="display:none" data-page-node-id="QSSbwCSYrBhRAdzG9zUlbu">
+
+<h2 data-page-node-id="bjKi1Fe45wpHobX7R78ES4">想法</h2>
+
+<div class="idea-card" data-page-node-id="PhBD14ofbfUgF627wXarIj">
+
+<p data-page-node-id="HkN43ZfSBzoTZhUWtul9No">
+当前想法：
+<span id="ideaCount" data-page-node-id="6tqNZigFLZIwe8nQs9AzLC">0</span>
+</p>
+
+<p data-page-node-id="08pcFT8WqJDz1uHcyghAfj">
+元-力量：
+<span id="metaPower" data-page-node-id="QxzwiYY3MQYV7fwrvozttS">0</span>
+（<span id="metaPowerRate" data-page-node-id="DmaO1HxFFEKOAQSaLXa32V">0</span>/秒）
+</p>
+
+<p data-page-node-id="Dw7YCVItIxlwPvFbrQiWgO">
+元-力量效果：所有理论力量生产速度
+×<span id="metaEffect" data-page-node-id="WOemf9D1dR57eLi7Adlk9Y">1</span>
+</p>
+
+<div id="metaEffects" data-page-node-id="WNWVWytawyCDo9DbnR4lMT">
+</div>
+
+<hr data-page-node-id="lyjXmVTBbFpiEqSg1wGilu">
+
+<p data-page-node-id="ktpxA5C6BAdRBEFhEz8BZH">
+下一个想法需要：
+<span id="ideaCost" data-page-node-id="H55OF9SAEO1yqzkSCZxEHf">1e6</span>
+知识
+</p>
+
+<p data-page-node-id="YDFBHbwpiiBPGjBB294v61">
+当前进度：
+<span id="ideaProgress" data-page-node-id="Q0QIsEMRgNSxcp4wx1G8HT">0 / 1e6</span>
+</p>
+
+<button id="getIdeaBtn" onclick="getIdea()" disabled data-page-node-id="BLoEtyFeYTPP65C8rb2oza">
+重置并获得想法
+</button>
+
+<p class="idea-hint" data-page-node-id="Ss9xikG2eOTXGe9cyz5h1r">
+重置会清空当前知识与理论，但想法与元-力量会保留。
+</p>
+
+</div>
+
+</div>
+
+
+<div id="researchPage" style="display:none" data-page-node-id="vS25JbHNBx70TIM2w6HJ1k">
+
+<h2 data-page-node-id="Yb8dvt3GWVNBVQit6WFXvR">研究</h2>
+
+<div class="research-status" data-page-node-id="hKbV6ZSnEzawKtqjJEcgM6">
+<p data-page-node-id="GuRQ9rd0mCllkTHA1umc70">
+研究阶段：<span id="researchStageVal" data-page-node-id="vAfin7odqLnsMQQBtPQMg4">0</span>
+</p>
+<p data-page-node-id="4dQQODMZ9lOOhTkXkYrqjM">
+行动点（AP）：<span id="researchAP" data-page-node-id="YcT2a08ejwIoVNLNEUWQLh">0</span>
+</p>
+</div>
+
+<div class="research-subnav" data-page-node-id="iw6DamTELSUbCe6UHiVZYm">
+<button class="research-tab active" data-sub="stage" data-page-node-id="clL4ljxMdc79MOhGc8qHvd">阶段</button>
+<button class="research-tab" data-sub="helper" data-page-node-id="qPWxN8hDe4PxECLNOtemNa">助手</button>
+<button class="research-tab" data-sub="experiment" data-page-node-id="bLTxnNuSuT5NwmWNeahFTX">实验</button>
+</div>
+
+<div id="researchStagePage" data-page-node-id="IM3ydvuA4Cf4r9M3EeYVFj">
+
+<h3 data-page-node-id="7PMkCsafypxCh1G4PcKuYQ">研究阶段</h3>
+
+<div class="research-card" data-page-node-id="fMKAbSMgwbXYLZfSDCJJZw">
+
+<p data-page-node-id="jHl9ALFE4MYd1i5SkOLWij">
+研究重置需要：
+<span id="researchNeed" data-page-node-id="NG7hZfwCaG3LwoU5f6G7j2">12 想法</span>
+</p>
+
+<p data-page-node-id="HzfMHoPprAAHfaFVr4vyBd">
+当前想法：
+<span id="researchProgress" data-page-node-id="cX3OXRcBjKyqLjN6nBfy92">0 / 12</span>
+</p>
+
+<p data-page-node-id="r4WUyvb3ZnoEi9qacuXAsH">
+本次重置可获得行动点：
+<span id="researchAPGain" data-page-node-id="tck4L7VmiIsUvJDrhJ9aEZ">5</span>
+</p>
+
+<div id="researchNextStage" style="display:none" data-page-node-id="9RoWGIQcqhal4G2zwY2x3y">
+</div>
+
+<button id="researchResetBtn" onclick="researchReset()" disabled data-page-node-id="1pH51tYYdnlPx65O87mN6w">
+进行研究重置
+</button>
+
+<p class="research-hint" data-page-node-id="tVDKKPl5tCiJnFPMswErgp">
+研究重置会重置知识、理论、想法与元-力量。
+</p>
+
+</div>
+
+<h3 data-page-node-id="PeIN9G8IsCm4zLDkFMCZFt">里程碑</h3>
+
+<div id="researchMilestones" data-page-node-id="5wcHXfQCv6KYpNlvhlCtRa">
+</div>
+
+</div>
+
+<div id="researchHelperPage" style="display:none" data-page-node-id="3650isTVFcgFjWVgQ5Jo0z">
+
+<h3 data-page-node-id="w5scDoA9hn8QYwfhDntlOj">助手</h3>
+
+<div id="researchHelpers" data-page-node-id="0Dtz1m281uVSTE18uxI0rK">
+</div>
+
+</div>
+
+<div id="researchExperimentPage" style="display:none" data-page-node-id="qzFfLIc50ED5SDoH9myBOq">
+
+<h3 data-page-node-id="zpOxvbNBfChAimRWqhix3a">实验</h3>
+
+<div class="exp-card" id="exp1Card" data-page-node-id="n2nHQWr9qWzkf5PooAmsmj">
+
+<div class="exp-head" data-page-node-id="iJJeqtlkUByC5ovR6a0k1j">
+<span class="exp-name" data-page-node-id="qt2VZ6BmoumEaOeWmlEa1n">非线性元件测量</span>
+<span id="exp1Status" class="exp-status" data-page-node-id="zALzUuXuYCf06KeTnXqN6y">进行中</span>
+<button class="exp-toggle" onclick="toggleExpCard('exp1Card')" data-page-node-id="CgAbtNgF82yvIrSP9LBgvE">收起</button>
+</div>
+
+<p class="exp-desc" data-page-node-id="Q2KzjgBbAOVczfr1OOfryE">
+目标元件的伏安特性函数 I=f(U) 是单调递增的。请通过测量某个 U 对应的 I,得到 I=1mA 时对应的电压 U_0(U_0 在 0~1V 范围内)。结果偏差小于 0.005V 后,完成本实验。
+</p>
+
+<p class="exp-hint" data-page-node-id="yiHrCu3r62CNNcyJXglpux">
+当前设备相对误差:<span id="exp1Err" data-page-node-id="MEuHeUp4QIkOegOMBbLiD0">5.00</span>%
+</p>
+
+<div class="exp-action" data-page-node-id="kVVAy8ToeJvn9gadlvFCSi">
+<label data-page-node-id="mcGPCWxypGIejbhMPxxrD6">测量 U(V):</label>
+<input id="exp1MeasureU" type="number" step="0.001" min="0" max="1" placeholder="0~1" data-page-node-id="0LK9YiW9DoACbYwVayztQ8">
+<button id="exp1MeasureBtn" onclick="exp1MeasureClick()" data-page-node-id="wDWVyvAZXRekeRIJZvPFIY">测量(1 AP)</button>
+</div>
+
+<div class="exp-action" data-page-node-id="4oBozebdnsVrIcbe2MVCur">
+<button id="exp1UpgradeBtn" onclick="exp1UpgradeClick()" data-page-node-id="GPyQQtL0T3HVpObw72SEzb">升级设备</button>
+</div>
+
+<div class="exp-action" data-page-node-id="8dqi6o1r4vEvHhmVeB087j">
+<label data-page-node-id="y6OXtq83f673ouKzcllY3L">提交 U_0(V):</label>
+<input id="exp1SubmitU" type="number" step="0.001" min="0" max="1" placeholder="0~1" data-page-node-id="aI0iFGVChxXQrBZ5TuQw0o">
+<button id="exp1SubmitBtn" onclick="exp1SubmitClick()" data-page-node-id="cneJY4wwN8FZgzHsBnToQM">提交(1 AP)</button>
+</div>
+
+<p id="exp1Msg" class="exp-hint" data-page-node-id="tEHSgqIvNnc67H1RjI2tOE"></p>
+
+<div id="exp1Result" data-page-node-id="Iz8bclxXMnj5tGAUG4DoXL">
+</div>
+
+<h4 data-page-node-id="cC8I0ry1B2Zxpsl5ZOmzKf">测量历史</h4>
+
+<div id="exp1History" data-page-node-id="Q4T1Mqjv0CVWmFULwKoOXz">
+</div>
+
+<div id="exp1Stats" data-page-node-id="ygSDsrHmKUP2I8dxLDgcNG">
+</div>
+
+</div>
+
+<div class="exp-card" id="exp2Card" style="display:none" data-page-node-id="U0GqWm9sGbXbNQcSbSVQBg">
+
+<div class="exp-head" data-page-node-id="LjnP0BCT8q75Apj8Plm2EG">
+<span class="exp-name" data-page-node-id="K0BXeJlLxxfbztBn4LfvU8">信号周期测量</span>
+<span id="exp2Status" class="exp-status" data-page-node-id="S6H937u9Ialc9NaG3hvM10">进行中</span>
+<button class="exp-toggle" onclick="toggleExpCard('exp2Card')" data-page-node-id="HY4KlhVdzW5UkLzxzly9Hz">收起</button>
+</div>
+
+<p class="exp-desc" data-page-node-id="8HxiYipL1sK1njFpICxZPP">
+一个周期未知的正弦波信号 s(t)=A·sin(2πt/T+φ) 持续产生,t 为解锁本实验以来的游戏时间。请通过多次测量不同时刻的信号值,推理出周期 T(T 在 60~120 秒之间)。结果偏差小于 0.5 秒后,完成本实验。
+</p>
+
+<p class="exp-hint" data-page-node-id="NtOJd6vmrAAaMWg2k5Bqz0">
+当前时间 t:<span id="exp2Time" data-page-node-id="OYmk8vY0PEbHzfY6fwt19f">0.0</span> s ｜ 当前设备相对误差:<span id="exp2Err" data-page-node-id="MkE9s6dLomq8NrLWOTd4RQ">5.00</span>%
+</p>
+
+<div class="exp-action" data-page-node-id="mAHuwyIpoN2bo7f0IP48tI">
+<button id="exp2MeasureBtn" onclick="exp2MeasureClick()" data-page-node-id="xZCU2ozkCqWdzeluD96Zvy">测量信号(5 AP)</button>
+</div>
+
+<div class="exp-action" data-page-node-id="Nu1ZtPRBPdgDJ099R2bNDT">
+<button id="exp2UpgradeBtn" onclick="exp2UpgradeClick()" data-page-node-id="XnIiuDOy1fe9g1sxMY4SQB">升级设备</button>
+</div>
+
+<div class="exp-action" data-page-node-id="yasFilEio48wMieAv6KjrA">
+<label data-page-node-id="YgOtva1w5wFecnVkZweJvb">提交周期 T(s):</label>
+<input id="exp2SubmitT" type="number" step="0.1" min="0" placeholder="60~120" data-page-node-id="7vpQZe4ctw6P7xPfyuYNKH">
+<button id="exp2SubmitBtn" onclick="exp2SubmitClick()" data-page-node-id="l31uSxIvXTVmgCH9675Czu">提交(5 AP)</button>
+</div>
+
+<p id="exp2Msg" class="exp-hint" data-page-node-id="uuiGF5IQVllNBczBLbrsSX"></p>
+
+<div id="exp2Result" data-page-node-id="4FXtIEww7S7zFJZK1oiR7j">
+</div>
+
+<h4 data-page-node-id="tUzFHPBKx7ow3GcBKcgYqQ">测量历史</h4>
+
+<div id="exp2History" data-page-node-id="RzlKMORnckdHANBZhMXhxv">
+</div>
+
+<div id="exp2Stats" data-page-node-id="3lgm4Y2EDqdFyUfmXpd6wm">
+</div>
+
+</div>
+
+<div class="exp-card" id="exp3Card" style="display:none" data-page-node-id="hWjzJRXpaEdrUVrDz1GhoT">
+
+<div class="exp-head" data-page-node-id="FrhtNanObLbHBSNC1lG5hs">
+<span class="exp-name" data-page-node-id="1MWRWmE7Qy695SAaNlwsoz">深度学习算法</span>
+<span id="exp3Status" class="exp-status" data-page-node-id="WM34GH9RcGscImt7Zemloj"></span>
+<button class="exp-toggle" onclick="toggleExpCard('exp3Card')" data-page-node-id="19ITpXJoRunkObZJMDUU0A">收起</button>
+</div>
+
+<p class="exp-desc" data-page-node-id="BqAG5So5CJJh7jG7eiIx3l">
+已知损失函数 L(x,y) 的值与两个参数 x,y 有关(x,y 在 0~1 范围内)。损失函数在某个 (x,y) 处取得最小值,且该位置唯一。请通过多次查询不同 (x,y) 的损失函数值,推断出使损失函数最小的 (x,y)。每次查询消耗 1000 行动点,返回该点的损失函数值(结果无误差,同时视为提交该 (x,y) 作为答案)。当提交的位置到最优点的距离小于 0.01 后,完成本实验。
+</p>
+
+<div id="exp3Body" data-page-node-id="ikSA7ZJBATjWegt1iyYS65">
+</div>
+
+<div class="exp-action" data-page-node-id="dVUzLHQR8p7yvy7vRloBRD">
+<label data-page-node-id="xzmTP0C6hSslwn32SiTlUU">x:</label>
+<input id="exp3X" type="number" step="0.01" min="0" max="1" placeholder="0~1" data-page-node-id="IFQQqczFdkHMhm2hntes5F">
+<label data-page-node-id="LrBH0FF0z6qHdqGFC1V5Fl">y:</label>
+<input id="exp3Y" type="number" step="0.01" min="0" max="1" placeholder="0~1" data-page-node-id="sLBuJvDh8KZdoqaGGQdzJt">
+<button id="exp3SubmitBtn" onclick="exp3SubmitClick()" data-page-node-id="ZIAyqxFOZnu8en3z0nKaud">查询损失(1000 AP)</button>
+</div>
+
+<p id="exp3Msg" class="exp-hint" data-page-node-id="9bMwiMxoPY6qBPYLLHXV9w"></p>
+
+<div id="exp3History" data-page-node-id="Ao8etn0PgahSx0JghrH0Dp">
+</div>
+
+<div id="exp3Stats" data-page-node-id="O05TqcsKEiRnzkP25BVoME">
+</div>
+
+</div>
+
+<div class="exp-card" id="exp4Card" style="display:none" data-page-node-id="N14R8uTw6JmrOWcbGOacbC">
+
+<div class="exp-head" data-page-node-id="v3aPZuSCL0bFeo7ESQMjIm">
+<span class="exp-name" data-page-node-id="SRMpFEePFuupx9yJRGfgB8">DNA测序</span>
+<span id="exp4Status" class="exp-status" data-page-node-id="6QbuyFVklqQr6gJChEgPHS"></span>
+<button class="exp-toggle" onclick="toggleExpCard('exp4Card')" data-page-node-id="2ew7SF64SpsWFZ1oGKHLfl">收起</button>
+</div>
+
+<p class="exp-desc" data-page-node-id="I29w4Raip26BfdknmN0PlV">
+一个长度为 10 的 DNA 序列 S(由 A、T、C、G 组成)。每次测序操作可以测得其中某个位置随机的连续片段(片段在 S 中的实际位置未知)。请根据测序结果,复原 S 中尽量长的连续片段。提交的内容必须是 S 中的连续片段才有效。复原完整的 S 以完成本实验。
+</p>
+
+<p class="exp-hint" data-page-node-id="3M9OnT1B0I7et1FDtu3k4B">
+当前测得片段长度:<span id="exp4Len" data-page-node-id="gKuDeBRifoGawmKkh1CJBm">2</span> 位
+</p>
+
+<div class="exp-action" data-page-node-id="XuxoYpHt9Lm1ZyxiG5VXbe">
+<button id="exp4MeasureBtn" onclick="exp4MeasureClick()" data-page-node-id="CSTqDj61vIcQqvidVhv3L7">测序(1e5 AP)</button>
+</div>
+
+<div class="exp-action" data-page-node-id="IqHU16KG139HBs2IkMk5Hu">
+<button id="exp4UpgradeBtn" onclick="exp4UpgradeClick()" data-page-node-id="mKUkSlOh0UVxVmxmlym8Vr">升级设备</button>
+</div>
+
+<div class="exp-action" data-page-node-id="adx9o8xNF9ZRF0m3UKe7mr">
+<label data-page-node-id="WRAhG2aK65Ew8dydxe5DBM">提交片段:</label>
+<input id="exp4Input" type="text" placeholder="由 ATCG 组成" data-page-node-id="H445ilxaBwKLm3DGG5A3rX">
+<button id="exp4SubmitBtn" onclick="exp4SubmitClick()" data-page-node-id="eaK1aBYXyJF7n0rZAFrBzH">提交(1e5 AP)</button>
+</div>
+
+<p id="exp4Msg" class="exp-hint" data-page-node-id="SjvUQxUqLERHFxov36Gi3d"></p>
+
+<div id="exp4Body" data-page-node-id="H0bRVRkYurvpp87AkwaaaW">
+</div>
+
+<h4 data-page-node-id="An0NNH4UpOlJMfsG6Qqhe4">测序历史</h4>
+
+<div id="exp4History" data-page-node-id="a7wV1H3nr1KFUVd2aoX2VD">
+</div>
+
+<div id="exp4Stats" data-page-node-id="EvNN5HQWLCgYo88N8yKH4H">
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div id="timePage" style="display:none" data-page-node-id="ZDZVtB2nq8QUo5Esqgyy50">
+
+<h2 data-page-node-id="WkupwpeAAzu5K20zMEiPGb">时间</h2>
+
+<p class="research-hint" data-page-node-id="LrUh2gKkTYXQCX9MyV9oyS">
+离线时,每 1 秒的离线时间将转化为 1 个时间碎片。消耗时间碎片加速游戏。
+</p>
+
+<p class="research-hint" id="timeDebugHint" style="display:none" data-page-node-id="JLesIBu3ofWPZTfLif5cZ3">
+调试模式下不消耗时间碎片。
+</p>
+
+<div id="timePanel" data-page-node-id="RHVPWtFh3oM7wD5Bs4JoqF">
+</div>
+
+</div>
+
+
+<div id="achievementPage" style="display:none" data-page-node-id="AbCXFSmSkDWYEBkiMDtWLm">
+
+<h2 data-page-node-id="LcjL5T6yMzyRD3nTlzfFnq">成就</h2>
+
+<p class="research-hint" data-page-node-id="Scz1Ey0pmbKjTP3nUzWMMQ">
+将鼠标悬停在格子上可查看成就内容与奖励。
+</p>
+
+<p class="research-hint" id="achvSummary" data-page-node-id="vgPvpieDqXPeERofpBwMVe">0 / 0 已达成</p>
+
+<div id="achvPanel" data-page-node-id="KWwPfZe1Cig8m2RpusWQqD">
+</div>
+
+</div>
+
+
+<div id="savePage" style="display:none" data-page-node-id="y0mbI5WHtj6hiyoGZfruAL">
+
+<h2 data-page-node-id="9HsIR9TFBTO0Pq5t2KlmjB">存档管理</h2>
+
+<p data-page-node-id="PAaW1us7RNq2OKKMC45hmp">
+<button onclick="manualSave()" data-page-node-id="2qwxUM5ClkzrZHIAuvrcJa">手动保存</button>
+<button onclick="exportSave()" data-page-node-id="Uyn1HnuwH8YM07XWhwwev0">导出存档</button>
+</p>
+
+<p data-page-node-id="H8TAZNvhNdlymc4Jq2an6c">导出的存档文本:</p>
+<textarea id="exportArea" readonly placeholder="点击「导出存档」后,此处会显示可复制的存档文本"></textarea>
+
+<p data-page-node-id="ngrZGG9BtLfYbnx8fUs5HM">导入存档(粘贴存档文本后点击导入):</p>
+<textarea id="importArea" placeholder="在此粘贴存档文本"></textarea>
+
+<p data-page-node-id="BUfmqeUlmwOdbWMBOr0A7k">
+<button onclick="importSave()" data-page-node-id="I2hhsHJxgPFqHR9rqJYOBh">导入存档</button>
+<button id="resetBtn" onclick="resetGame()" data-page-node-id="oGM6WlYg1Qm2EaCkpB1t7E">重置游戏</button>
+</p>
+
+</div>
+
+
+</div>
+
+
+
+<div id="statsPage" style="display:none" data-page-node-id="KTUWOWJjhLADCLurADPmvR">
+
+<h2 data-page-node-id="JME9INmKDfZZzG6YyZ32VY">统计</h2>
+
+<div class="stats-subnav" data-page-node-id="NhRNKQA0GBP5EggKNGM25n">
+<button class="stats-tab active" data-sub="game" data-page-node-id="8WMYeLy7mRjHMj5W6mMQvU">游戏统计</button>
+<button class="stats-tab" data-sub="num" data-page-node-id="SZn2ny3Xi7skkXmtmTbXJv">数值统计</button>
+</div>
+
+<div id="statsGamePage" data-page-node-id="RKfUBMB60AjmGLBwvrp0vH">
+
+<p class="research-hint" data-page-node-id="wnhOLYRum5qqcYU4rdqPvV">
+你的游戏生涯统计,部分条目随游戏进程解锁。
+</p>
+
+<div id="statsGamePanel" data-page-node-id="hf9PGpbkSyD0bGBmZ5SHXc">
+</div>
+
+</div>
+
+<div id="statsNumPage" style="display:none" data-page-node-id="eBMoi02i6ldMMbD0PPQI8s">
+
+<p class="research-hint" data-page-node-id="SeF7CLo2IKD5nS3VhKJsm0">
+点击各条目可展开查看产出分解,找出主要的提升来源。
+</p>
+
+<div id="statsPanel" data-page-node-id="ZUFvG5HEC2PTiuDRe07XH2">
+</div>
+
+</div>
+
+</div>
+
+
+
+<div id="aboutPage" style="display:none">
+
+<h2>关于</h2>
+
+<div class="about-subnav">
+<button class="about-tab active" data-sub="intro">游戏介绍</button>
+<button class="about-tab" data-sub="changelog">更新日志</button>
+</div>
+
+<div id="aboutIntroPage">
+
+<p class="research-hint">
+知识纪元是一款科研主题的增量游戏。点击各标题可展开或收起对应说明。
+</p>
+
+<div id="aboutIntroPanel">
+</div>
+
+</div>
+
+<div id="aboutChangelogPage" style="display:none">
+
+<div class="changelog-entry">
+<h3>V0.6 多元拓展 <span class="changelog-date">2026/9/11</span></h3>
+<ul>
+<li>将原本的离线进度改为时间碎片系统</li>
+<li>增加了成就</li>
+<li>增加更多剧情文本</li>
+<li>增加了游戏统计页面</li>
+<li>增加键盘操作功能</li>
+<li>增加了知识边界</li>
+<li>增加了"关于"页面</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
+<h3>V0.5 自动化时代 <span class="changelog-date">2026/8/30</span></h3>
+<ul>
+<li>增加了研究阶段3相关内容</li>
+<li>增加了重复实验功能</li>
+<li>增加了自动实验助手</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
+<h3>V0.4 优化与拼接 <span class="changelog-date">2026/8/24</span></h3>
+<ul>
+<li>增加了研究阶段2相关内容</li>
+<li>增加一个新助手和实验3,4</li>
+<li>增加了数值统计面板</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
+<h3>V0.3 新篇之始 <span class="changelog-date">2026/8/23</span></h3>
+<ul>
+<li>增加了研究和助手</li>
+<li>增加了实验1,2</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
+<h3>V0.2 一个新想法 <span class="changelog-date">2026/8/11</span></h3>
+<ul>
+<li>增加了想法</li>
+<li>增加了元-力量和相应效果</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
+<h3>V0.1 开端 <span class="changelog-date">2026/8/10</span></h3>
+<ul>
+<li>创建了游戏</li>
+<li>增加了知识和理论</li>
+<li>增加了初始剧情</li>
+<li>增加了存档和离线进度机制</li>
+</ul>
+</div>
+
+</div>
+
+</div>
+
+
+
+<script src="lib/break_eternity.js"></script>
+
+<script src="js/game.js"></script>
+
+<script src="js/format.js"></script>
+
+<script src="js/story.js"></script>
+
+<script src="js/theories.js"></script>
+
+<script src="js/ideas.js"></script>
+
+<script src="js/research.js"></script>
+
+<script src="js/experiment.js"></script>
+
+<script src="js/savecrypto.js"></script>
+
+<script src="js/save.js"></script>
+
+<script src="js/achievements.js"></script>
+
+<script src="js/stats.js"></script>
+
+<script src="js/about.js"></script>
+
+<script src="js/main.js"></script>
+
+
+</body>
+
+</html>

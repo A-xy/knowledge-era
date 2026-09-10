@@ -1,0 +1,16 @@
+# 个人存档文件(含游戏进度,不上传)
+savefile*.txt
+
+# 系统/编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*~
+
+# 依赖(本项目无依赖,预留)
+node_modules/
+
+# 临时测试脚本
+test_*_temp.js
