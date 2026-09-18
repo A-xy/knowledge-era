@@ -18,7 +18,10 @@ const RESEARCH_CONFIG = {
     actionExp: 1/20,    // 行动点公式指数
     actionMin: 5,       // 行动点最低值
     bonusCap: 10,       // 里程碑加成上限(重置次数,最大10)
-    designedStages: 3   // 已设计的研究阶段数(超出则显示"后续研究阶段待更新")
+    designedStages: 3,  // 已设计的研究阶段数(超出则显示"后续研究阶段待更新")
+    // "高速研究"成就:相邻两次研究重置的游戏时间间隔 ≤ 该值(秒)即达成。
+    // 成就描述文本由 achievements.js 引用此值生成,改这里即可同步。
+    fastResearchWindow: 30
 };
 
 
@@ -184,11 +187,12 @@ function researchReset(){
     // 研究重置次数 +1(里程碑加成依据)
     game.researchResets++;
 
-    // 高速研究成就计时:与上次研究重置的游戏时间间隔 ≤10 秒
+    // 高速研究成就计时:与上次研究重置的游戏时间间隔 ≤ 阈值(默认30秒)
     // (首次重置无上次记录,不计;达成一次即永久解锁)
     let nowTime = game.totalTime || 0;
     if(game.lastResearchResetTime !== null
-        && nowTime - game.lastResearchResetTime <= 10)
+        && nowTime - game.lastResearchResetTime
+            <= RESEARCH_CONFIG.fastResearchWindow)
         game.fastResearchFlag = true;
 
     // 生涯统计:最快研究重置用时(相邻两次重置的游戏时间间隔;首次无上次不计)
@@ -211,9 +215,9 @@ function researchReset(){
     (game.totalResearchPoints || new Decimal(0))
     .add(gainedAP);
 
-    // 重置知识(成就"第一个想法"达成后:保留 10 知识)
+    // 重置知识(成就"新篇之始"达成后:保留 10 知识)
     game.knowledge =
-    isAchievementUnlocked("idea1")
+    isAchievementUnlocked("stage1")
     ? new Decimal(10)
     : new Decimal(0);
 

@@ -1425,11 +1425,8 @@ function renderExpStats(key, boxId, firstEffectDesc){
 
     let html = "";
 
-    // 已最优化标记:最少操作次数 ≤ 对应最优化操作次数(自动实验助手配置)
-    if(e.bestOperations !== null
-        && e.bestOperations !== undefined
-        && expOptimalOps(key) !== null
-        && e.bestOperations <= expOptimalOps(key)){
+    // 已最优化标记:研究阶段3 解锁 + 最少操作次数 ≤ 最优化操作次数
+    if(expOptimized(key)){
 
         html +=
         "<p class=\"exp-hint\">已最优化</p>";
@@ -2606,8 +2603,37 @@ function expOptimalOps(key){
 }
 
 
+// 该实验是否"已最优化"
+// 需研究阶段3(自动化研究)解锁后才显示/生效:
+//   最少操作次数 ≤ 该实验的最优化操作次数
+function expOptimized(key){
+
+    if(!isMilestoneActive("stage3"))
+        return false;
+
+    let e =
+    game.experiments[key];
+
+    if(!e)
+        return false;
+
+    let opt =
+    expOptimalOps(key);
+
+    if(opt === null || opt === undefined)
+        return false;
+
+    if(e.bestOperations === null
+        || e.bestOperations === undefined)
+        return false;
+
+    return e.bestOperations <= opt;
+
+}
+
+
 // 实验状态文本(HTML):状态 + "已最优化"标记(金色)
-// 已最优化:最少操作次数 ≤ 该实验的最优化操作次数
+// 已最优化:研究阶段3 解锁后,最少操作次数 ≤ 该实验的最优化操作次数
 function expStatusHTML(key, e, lockedLabel){
 
     if(!e)
@@ -2616,10 +2642,7 @@ function expStatusHTML(key, e, lockedLabel){
     let s =
     e.completed ? "已完成" : "进行中";
 
-    if(expOptimalOps(key) !== null
-        && e.bestOperations !== null
-        && e.bestOperations !== undefined
-        && e.bestOperations <= expOptimalOps(key)){
+    if(expOptimized(key)){
 
         s +=
         " <span class=\"assistant-opt\">已最优化</span>";

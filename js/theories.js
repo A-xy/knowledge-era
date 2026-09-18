@@ -389,12 +389,23 @@ function getKnowledgeSpeed(){
 }
 
 
+// "购买最大"按钮是否已解锁
+// 成就"终极理论吗?"(解锁终极理论)达成后永久解锁,不会被想法重置清掉;
+// 研究阶段1 里程碑也提供该按钮。
+function buyMaxUnlocked(){
+
+    return isAchievementUnlocked("theory5")
+    || isMilestoneActive("stage1");
+
+}
+
+
 // 绘制理论界面
 // 采用增量渲染:卡片只在状态(解锁/等级)变化时才重建,
 // 数值变化只更新文本,避免每帧重建按钮导致点击事件丢失
 function renderTheories(){
 
-    // 购买最大按钮:理论5解锁后显示;研究里程碑 stage1 后始终可用
+    // 购买最大按钮:成就"终极理论吗?"永久解锁(或研究阶段1 里程碑)
     let buyBtn =
     document.getElementById(
         "buyMaxBtn"
@@ -402,9 +413,7 @@ function renderTheories(){
 
     if(buyBtn){
         buyBtn.style.display =
-        ((game.theories.theory5 && game.theories.theory5.unlocked)
-        || isMilestoneActive("stage1"))
-        ? "block" : "none";
+        buyMaxUnlocked() ? "block" : "none";
     }
 
     let box =
@@ -584,30 +593,23 @@ function renderTheories(){
 
 
 // ============================================================
-// 键盘操作(仅理论页可见时)
+// 键盘操作(在游戏界面的任意页面都可用)
 //   数字键 1~5:购买对应理论(未解锁则解锁,已解锁则升级一次)
 //   M 键:购买全部最大;按住 M 持续生效
+//         (仅在"购买最大"解锁后有效,见 buyMaxUnlocked)
 // ============================================================
 
-// 理论页当前是否可见(游戏界面显示中 + 知识页为激活页)
-function theoryPageVisible(){
+// 键盘操作是否生效:只要处于游戏界面(非剧情界面)即可,
+// 不限于知识/理论页——在想法/研究/成就等页面同样可用
+function keyboardActive(){
 
     let gameScreen =
     document.getElementById(
         "gameScreen"
     );
 
-    if(!gameScreen
-        || gameScreen.style.display !== "block")
-        return false;
-
-    let page =
-    document.getElementById(
-        "knowledgePage"
-    );
-
-    return !!page
-    && page.style.display !== "none";
+    return !!gameScreen
+    && gameScreen.style.display === "block";
 
 }
 
@@ -655,10 +657,10 @@ function stopHoldBuyMax(){
     if(!document.addEventListener)
         return;
 
-    // 仅在理论页可见时响应键盘
+    // 仅在游戏界面(非剧情界面)响应键盘
     document.addEventListener("keydown", function(e){
 
-        if(!theoryPageVisible())
+        if(!keyboardActive())
             return;
 
         // 防止输入框内误触
@@ -684,9 +686,13 @@ function stopHoldBuyMax(){
         }
 
         // M / m → 购买最大(按住持续生效)
+        // 仅在"购买最大"已解锁后有效(成就"终极理论吗?"/研究阶段1 里程碑)
         if(e.key === "m" || e.key === "M"){
 
             e.preventDefault();
+
+            if(!buyMaxUnlocked())
+                return;
 
             if(holdMBuyTimer)
                 return; // 已在持续中

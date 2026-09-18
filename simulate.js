@@ -106,7 +106,7 @@ global.localStorage = {
 global.alert = () => {}; global.confirm = () => true; global.location = { reload() {} };
 ['storyScreen','gameScreen','storyText','storyNextBtn','theories','knowledge','kps','buyMaxBtn',
  'ideaCount','metaPower','metaPowerRate','metaEffect','ideaCost','ideaProgress','getIdeaBtn',
- 'offlineNotice','debugInfo','pageNav','achvToast','achvSummary','achvPanel','knowledgeLimit',
+ 'offlineNotice','debugInfo','pageNav','achvToast','achvSummary','achvPanel','achvDetail','knowledgeLimit',
  'knowledgePage','ideaPage','researchPage','timePage','timePanel','timeDebugHint','achievementPage','savePage',
  'aboutPage','aboutIntroPage','aboutChangelogPage','aboutIntroPanel','about-subnav',
  'researchStageVal','researchAP','researchNeed','researchProgress','researchAPGain',

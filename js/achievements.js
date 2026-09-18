@@ -12,15 +12,16 @@
 // condDesc: 达成条件描述(悬停显示)
 // rewardDesc: 奖励描述(悬停显示)
 // shards: 达成奖励的时间碎片(无则 0/省略)
-// unlock: 奖励解锁的特殊内容(可选):
+// unlock: 奖励解锁的特殊内容(可选;均为"实时查询"式解锁,不额外发放):
 //   keep10    重置后保留 10 知识(想法/研究重置)
 //   speed3    解锁 ×3 加速倍率
 //   speed5    解锁 ×5 加速倍率
 //   cap8h     时间碎片储量上限 → 8 小时
 //   cap12h    时间碎片储量上限 → 12 小时
-//   buyMax    全部最大按钮永久可用(机制已存在,仅登记)
+//   buyMax    全部最大按钮永久解锁(不被想法重置影响)
 //   record    纯记录型(解锁内容由已有机制自动提供,仅登记)
 // check: 达成条件函数
+// 说明:格子上点击可选中,选中的成就会在上方详情面板中显示条件/奖励/状态。
 const ACHIEVEMENT_LIST = [
     // ---- 第一行(理论) ----
     {
@@ -59,7 +60,7 @@ const ACHIEVEMENT_LIST = [
         id: "theory5",
         name: "终极理论吗?",
         condDesc: "解锁终极理论",
-        rewardDesc: "解锁全部最大按钮",
+        rewardDesc: "全部最大按钮永久解锁(不会被想法重置)",
         unlock: "buyMax",
         check: function(){ return !!game.theories.theory5.unlocked; }
     },
@@ -68,16 +69,16 @@ const ACHIEVEMENT_LIST = [
         id: "idea1",
         name: "第一个想法",
         condDesc: "拥有 1 想法",
-        rewardDesc: "重置后保留 10 知识",
-        unlock: "keep10",
+        rewardDesc: "解锁 ×3 加速倍率",
+        unlock: "speed3",
         check: function(){ return game.ideas >= 1; }
     },
     {
         id: "idea4",
         name: "更多加成",
         condDesc: "拥有 4 想法",
-        rewardDesc: "解锁 ×3 加速倍率",
-        unlock: "speed3",
+        rewardDesc: "60 时间碎片",
+        shards: 60,
         check: function(){ return game.ideas >= 4; }
     },
     {
@@ -109,8 +110,8 @@ const ACHIEVEMENT_LIST = [
         id: "stage1",
         name: "新篇之始",
         condDesc: "达到研究阶段 1",
-        rewardDesc: "全部最大按钮永久可用",
-        unlock: "buyMax",
+        rewardDesc: "重置后保留 10 知识",
+        unlock: "keep10",
         check: function(){ return game.researchStage >= 1; }
     },
     {
@@ -176,7 +177,8 @@ const ACHIEVEMENT_LIST = [
     {
         id: "fastResearch",
         name: "高速研究",
-        condDesc: "在游戏时间 10 秒内完成一次研究重置",
+        condDesc: "在游戏时间 " + RESEARCH_CONFIG.fastResearchWindow +
+            " 秒内完成一次研究重置",
         rewardDesc: "解锁 ×5 加速倍率",
         unlock: "speed5",
         check: function(){ return !!game.fastResearchFlag; }
@@ -351,7 +353,7 @@ function showAchievementToast(conf){
 
 
 // ============================================================
-// 成就页面渲染(5 列网格)
+// 成就页面渲染(5 列网格 + 点击选中详情)
 // ============================================================
 function renderAchievementsPage(){
 
@@ -382,52 +384,156 @@ function renderAchievementsPage(){
 
     }
 
-    if(lastAchvKey === key)
-        return;
+    if(lastAchvKey !== key){
 
-    lastAchvKey = key;
+        lastAchvKey = key;
 
-    let summary =
-    document.getElementById(
-        "achvSummary"
-    );
+        let summary =
+        document.getElementById(
+            "achvSummary"
+        );
 
-    if(summary)
-        summary.innerText =
-        doneCount + " / " + ACHIEVEMENT_LIST.length + " 已达成";
+        if(summary)
+            summary.innerText =
+            doneCount + " / " + ACHIEVEMENT_LIST.length + " 已达成";
 
-    // 5 列网格:格子里显示成就名(未点亮灰暗/已点亮金色发光)
-    let html =
-    '<div class="achv-grid">';
+        // 5 列网格:格子里显示成就名(未点亮灰暗/已点亮金色发光)
+        let html =
+        '<div class="achv-grid">';
 
-    for(let i = 0; i < ACHIEVEMENT_LIST.length; i++){
+        for(let i = 0; i < ACHIEVEMENT_LIST.length; i++){
 
-        let a =
-        ACHIEVEMENT_LIST[i];
+            let a =
+            ACHIEVEMENT_LIST[i];
 
-        let done =
-        isAchievementUnlocked(a.id);
+            let done =
+            isAchievementUnlocked(a.id);
 
-        let tip =
-        a.name + " - " + a.condDesc + ";奖励:" +
-        a.rewardDesc + ";" +
-        (done ? "已完成" : "未完成");
+            let tip =
+            a.name + " - " + a.condDesc + ";奖励:" +
+            a.rewardDesc + ";" +
+            (done ? "已完成" : "未完成");
 
-        html +=
-        '<div class="achv-cell' + (done ? " lit" : "") + '" title="' + tip + '">' +
-        a.name +
-        '</div>';
+            let sel =
+            (a.id === selectedAchvId) ? " sel" : "";
+
+            html +=
+            '<div class="achv-cell' + (done ? " lit" : "") + sel +
+            '" data-achv="' + a.id + '" title="' + tip + '">' +
+            a.name +
+            '</div>';
+
+        }
+
+        html += '</div>';
+
+        panel.innerHTML = html;
+
+        // 点击格子 → 选中并在上方显示详情
+        let cells =
+        panel.querySelectorAll
+        ? panel.querySelectorAll(".achv-cell")
+        : [];
+
+        for(let i = 0; i < cells.length; i++){
+
+            cells[i].addEventListener("click", function(){
+
+                selectedAchvId = this.dataset.achv;
+
+                for(let j = 0; j < cells.length; j++){
+
+                    if(cells[j].dataset.achv === selectedAchvId)
+                        cells[j].classList.add("sel");
+                    else
+                        cells[j].classList.remove("sel");
+
+                }
+
+                renderAchvDetail();
+
+            });
+
+        }
 
     }
 
-    html += '</div>';
-
-    panel.innerHTML = html;
+    // 详情面板每 tick 刷新(内容不变时不重建 DOM)
+    renderAchvDetail();
 
 }
 
 
 let lastAchvKey = "";
+
+
+// ============================================================
+// 选中成就详情(网格上方)
+// ============================================================
+// 当前被选中的成就 id(点击格子设置;null = 未选中,面板隐藏)
+let selectedAchvId = null;
+
+
+// 按 id 取成就配置
+function achvById(id){
+
+    for(let i = 0; i < ACHIEVEMENT_LIST.length; i++){
+
+        if(ACHIEVEMENT_LIST[i].id === id)
+            return ACHIEVEMENT_LIST[i];
+
+    }
+
+    return null;
+
+}
+
+
+// 绘制选中成就详情(未选中时隐藏)
+function renderAchvDetail(){
+
+    let box =
+    document.getElementById(
+        "achvDetail"
+    );
+
+    if(!box)
+        return;
+
+    let a =
+    selectedAchvId
+    ? achvById(selectedAchvId)
+    : null;
+
+    if(!a){
+
+        box.style.display = "none";
+
+        if(box.innerHTML !== "")
+            box.innerHTML = "";
+
+        return;
+
+    }
+
+    let done =
+    isAchievementUnlocked(a.id);
+
+    let html =
+    '<div class="achv-detail-head">' +
+    a.name +
+    '<span class="achv-detail-state' + (done ? " done" : "") + '">' +
+    (done ? "已达成" : "未达成") +
+    '</span></div>' +
+    '<div class="achv-detail-line">达成条件:' + a.condDesc + '</div>' +
+    '<div class="achv-detail-line">奖励:' + a.rewardDesc + '</div>';
+
+    if(box.innerHTML !== html)
+        box.innerHTML = html;
+
+    box.style.display = "block";
+
+}
 
 
 // 成就页面初始化入口(页面可见时渲染,update 中调用)

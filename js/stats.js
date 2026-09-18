@@ -293,13 +293,14 @@ function updateStatVals(){
 // ============================================================
 // 游戏统计(Game Stats) —— 统计页"游戏统计"子页
 // 生涯累计数据,部分行按游戏进度解锁显示:
-//   基础   : 游戏时间
-//   想法解锁后 : 累计生产知识 / 累计获得想法 / 历史最高想法
+//   基础   : 游戏时间 / 累计生产知识(开局即显示)
+//   想法解锁后 : 累计获得想法 / 历史最高想法
 //   研究解锁后 : 累计获得研究点 / 研究重置次数
-//   研究阶段3后: 最快研究重置用时 / 实验完成总次数
+//   研究重置后 : 最快研究重置用时
+//   研究阶段3后: 实验完成总次数
 // ============================================================
 
-// 组可见签名(想法/研究/阶段3),变化时重建 DOM
+// 组可见签名(想法/研究/最快重置/阶段3),变化时重建 DOM
 let lastGameStatsKey = "";
 
 function gameStatsKey(){
@@ -308,6 +309,7 @@ function gameStatsKey(){
         (game.totalIdeas > 0 || game.ideaStorySeen) ? 1 : 0,
         (game.researchResets > 0 || game.researchStage >= 1
             || game.researchStorySeen) ? 1 : 0,
+        (game.researchResets >= 1) ? 1 : 0,
         (game.researchStage >= 3) ? 1 : 0
     ].join(":");
 
@@ -359,19 +361,23 @@ function renderGameStats(){
     let showResearch =
     parts[1] === "1";
 
-    let showStage3 =
+    // 最快研究重置用时:完成第一次研究重置后显示
+    let showFastest =
     parts[2] === "1";
+
+    let showStage3 =
+    parts[3] === "1";
 
     if(key !== lastGameStatsKey){
 
         lastGameStatsKey = key;
 
         let html =
-        '<div class="game-stat">你一共玩了<span class="stat-val gs-time"></span>(游戏时间)</div>';
+        '<div class="game-stat">你一共玩了<span class="stat-val gs-time"></span>(游戏时间)</div>' +
+        '<div class="game-stat">你一共生产了<span class="stat-val gs-produced"></span>知识</div>';
 
         if(showIdea){
             html +=
-            '<div class="game-stat">你一共生产了<span class="stat-val gs-produced"></span>知识</div>' +
             '<div class="game-stat">你累计获得了<span class="stat-val gs-totalideas"></span>想法</div>' +
             '<div class="game-stat">你的历史最高想法数是<span class="stat-val gs-maxideas"></span></div>';
         }
@@ -382,9 +388,13 @@ function renderGameStats(){
             '<div class="game-stat">你一共进行了<span class="stat-val gs-resets"></span>次研究重置</div>';
         }
 
+        if(showFastest){
+            html +=
+            '<div class="game-stat">最快的研究重置用时<span class="stat-val gs-fastest"></span></div>';
+        }
+
         if(showStage3){
             html +=
-            '<div class="game-stat">最快的研究重置用时<span class="stat-val gs-fastest"></span></div>' +
             '<div class="game-stat">所有实验合计已完成<span class="stat-val gs-expall"></span>次</div>';
         }
 
@@ -403,11 +413,11 @@ function renderGameStats(){
     };
 
     set(".gs-time", formatGameTime(game.totalTime || 0));
+    set(".gs-produced", format(
+        game.totalKnowledgeProduced || 0
+    ));
 
     if(showIdea){
-        set(".gs-produced", format(
-            game.totalKnowledgeProduced || 0
-        ));
         set(".gs-totalideas", game.totalIdeas || 0);
         set(".gs-maxideas", game.maxIdeas || 0);
     }
@@ -419,13 +429,16 @@ function renderGameStats(){
         set(".gs-resets", game.researchResets || 0);
     }
 
-    if(showStage3){
+    if(showFastest){
         let fastest =
         (game.fastestResearchReset === null
             || game.fastestResearchReset === undefined)
         ? "-"
         : formatGameTime(game.fastestResearchReset);
         set(".gs-fastest", fastest);
+    }
+
+    if(showStage3){
         set(".gs-expall", totalExpCompletions());
     }
 

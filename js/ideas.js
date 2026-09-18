@@ -364,9 +364,9 @@ function getIdea(){
         || game.ideas > game.maxIdeas)
         game.maxIdeas = game.ideas;
 
-    // 重置知识(成就"第一个想法"达成后:保留 10 知识)
+    // 重置知识(成就"新篇之始"达成后:保留 10 知识)
     game.knowledge =
-    isAchievementUnlocked("idea1")
+    isAchievementUnlocked("stage1")
     ? new Decimal(10)
     : new Decimal(0);
 
@@ -430,15 +430,6 @@ function renderIdeaPage(){
 
     if(metaRate)
         metaRate.innerText = format(metaPowerGain());
-
-    // 元-力量效果1:× (1 + metaPower)
-    let effect =
-    document.getElementById(
-        "metaEffect"
-    );
-
-    if(effect)
-        effect.innerText = format(metaPowerBonus());
 
     // 元-力量效果列表(增量渲染)
     renderMetaEffects();

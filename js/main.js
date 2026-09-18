@@ -19,18 +19,18 @@ const DEBUG = {
 const TIME_CONFIG = {
     maxShards: 14400,          // 时间碎片储量上限(4 小时 × 3600 秒)
     maxMultUnlock: 2,          // 普通模式初始解锁的最大档位(成就可提升)
-    mults: [1, 2, 3, 5, 10, 50, 100]  // 全部速度档位(×3 由成就"更多加成"解锁)
+    mults: [1, 2, 3, 5, 10, 50, 100]  // 全部速度档位(×3 由成就"第一个想法"解锁)
 };
 
 
 // 当前可解锁的最大档位(普通模式;调试模式解锁全部)
-// 成就解锁:×3(更多加成,4想法)/ ×5(高速研究)
+// 成就解锁:×3(第一个想法,1想法)/ ×5(高速研究,30秒内再次重置)
 function timeMaxMult(){
     if(DEBUG.enabled)
         return TIME_CONFIG.mults[TIME_CONFIG.mults.length - 1];
     if(isAchievementUnlocked("fastResearch"))
         return 5;
-    if(isAchievementUnlocked("idea4"))
+    if(isAchievementUnlocked("idea1"))
         return 3;
     return TIME_CONFIG.maxMultUnlock;
 }
