@@ -146,7 +146,7 @@ function renderTimePage(){
                 : ' <span class="time-cost">消耗 ' + (mult - 1) + ' 碎片/秒</span>')
             : '') +
         '</div>';
-    // 档位按钮
+    // 档位按钮(仅显示已解锁的档位)
     html += '<div class="time-btns">';
     for(let i = 0; i < TIME_CONFIG.mults.length; i++){
         let m = TIME_CONFIG.mults[i];
@@ -154,9 +154,6 @@ function renderTimePage(){
             let active = (mult === m) ? ' active' : '';
             html += '<button class="time-btn' + active + '" data-mult="' + m + '">×' + m +
                 (m > 1 ? '<small>' + (m - 1) + '/s</small>' : '') + '</button>';
-        }else{
-            html += '<button class="time-btn locked" disabled title="更高档位待成就解锁">×' + m +
-                ' 🔒</button>';
         }
     }
     html += '</div>';

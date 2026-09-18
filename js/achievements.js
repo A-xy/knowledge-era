@@ -60,7 +60,7 @@ const ACHIEVEMENT_LIST = [
         id: "theory5",
         name: "终极理论吗?",
         condDesc: "解锁终极理论",
-        rewardDesc: "全部最大按钮永久解锁(不会被想法重置)",
+        rewardDesc: "解锁全部最大按钮",
         unlock: "buyMax",
         check: function(){ return !!game.theories.theory5.unlocked; }
     },
