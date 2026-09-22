@@ -265,6 +265,44 @@ function applyResearchResetCore(gainAP, advanceStage){
 }
 
 
+// 记录一次"正常"研究重置的统计信息(仅当重置满足正常条件,即想法数达标时调用)
+//   - 研究重置次数 +1(里程碑 stage1 加成依据)
+//   - 刷新最快重置用时(相邻两次正常重置的游戏时间间隔;首次无上次不计)
+//   - 可触发"高速研究"(间隔 ≤ fastResearchWindow)
+// 前沿领域:想法达标时同样走这里,不足 12 想法则完全不计入任何数据
+function recordResearchReset(){
+
+    // 研究重置次数 +1
+    game.researchResets++;
+
+    let nowTime =
+    game.totalTime || 0;
+
+    // 高速研究:与上次正常重置的游戏时间间隔 ≤ 阈值(默认30秒)
+    // (首次无上次记录,不计;达成一次即永久解锁)
+    if(game.lastResearchResetTime !== null
+        && nowTime - game.lastResearchResetTime
+            <= RESEARCH_CONFIG.fastResearchWindow)
+        game.fastResearchFlag = true;
+
+    // 生涯统计:最快研究重置用时(首次无上次,不计)
+    if(game.lastResearchResetTime !== null){
+
+        let gap =
+        nowTime - game.lastResearchResetTime;
+
+        if(game.fastestResearchReset === null
+            || game.fastestResearchReset === undefined
+            || gap < game.fastestResearchReset)
+            game.fastestResearchReset = gap;
+
+    }
+
+    game.lastResearchResetTime = nowTime;
+
+}
+
+
 // 执行研究重置
 // 重置:知识、理论、想法、元力量
 // 获得:行动点(基于重置前知识)、推进研究阶段
@@ -276,27 +314,8 @@ function researchReset(){
 
     applyResearchResetCore(true, true);
 
-    // 研究重置次数 +1(里程碑加成依据)
-    game.researchResets++;
-
-    // 高速研究成就计时:与上次研究重置的游戏时间间隔 ≤ 阈值(默认30秒)
-    // (首次重置无上次记录,不计;达成一次即永久解锁)
-    let nowTime = game.totalTime || 0;
-    if(game.lastResearchResetTime !== null
-        && nowTime - game.lastResearchResetTime
-            <= RESEARCH_CONFIG.fastResearchWindow)
-        game.fastResearchFlag = true;
-
-    // 生涯统计:最快研究重置用时(相邻两次重置的游戏时间间隔;首次无上次不计)
-    if(game.lastResearchResetTime !== null){
-        let gap = nowTime - game.lastResearchResetTime;
-        if(game.fastestResearchReset === null
-            || game.fastestResearchReset === undefined
-            || gap < game.fastestResearchReset)
-            game.fastestResearchReset = gap;
-    }
-
-    game.lastResearchResetTime = nowTime;
+    // 正常研究重置:计入次数 / 最快用时 / 高速研究
+    recordResearchReset();
 
     // 保存
     saveGame();
