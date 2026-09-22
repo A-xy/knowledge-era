@@ -256,6 +256,15 @@ const ACHIEVEMENT_LIST = [
         check: function(){
             return game.knowledge.gte(KNOWLEDGE_LIMIT);
         }
+    },
+    // ---- 第六行 ----
+    {
+        id: "stage4",
+        name: "求知",
+        condDesc: "达到研究阶段 4",
+        rewardDesc: "解锁前沿领域",
+        unlock: "record",
+        check: function(){ return game.researchStage >= 4; }
     }
 ];
 

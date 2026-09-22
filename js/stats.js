@@ -24,6 +24,8 @@ function statsKey(){
     return [
         unlocked,
         isMilestoneActive("stage1") ? 1 : 0,
+        isMilestoneActive("stage4") ? 1 : 0,   // 前沿研究:知识产出新增一行
+        summaryUnlocked() ? 1 : 0,             // 摘要:知识边界倍率行
         isEffectUnlocked("metaGain") ? 1 : 0,
         game.ideas >= 4 ? 1 : 0   // 升级倍率效果影响理论力量分解
     ].join(":");
@@ -89,9 +91,20 @@ function buildStatsHTML(){
         '<div class="stat-line">研究加成(阶段1):×<span class="stat-val" data-key="resKnow"></span></div>';
     }
 
+    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    if(isMilestoneActive("stage4")){
+        html +=
+        '<div class="stat-line">研究加成(阶段4·前沿研究):×<span class="stat-val" data-key="resKnow4"></span>(= (1+累计行动点)^2)</div>';
+    }
+
     // 知识边界(软上限):显示知识生产被除以的倍数(= 原始速度 / 受限后速度)
     html +=
     '<div class="stat-line">知识边界:÷<span class="stat-val" data-key="knowledgeCap"></span></div>';
+
+    // 论文升级"摘要":知识边界倍率与当前边界值(未购买时 ×1 / 基础值)
+    html +=
+    '<div class="stat-line">知识边界倍率(摘要):×<span class="stat-val" data-key="summaryMult"></span></div>' +
+    '<div class="stat-line">当前知识边界:<span class="stat-val" data-key="limitVal"></span>/s</div>';
 
     html += '</details>';
 
@@ -210,8 +223,16 @@ function updateStatVals(){
     if(isMilestoneActive("stage1"))
         setStat("resKnow", researchPowerBonus());
 
+    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    if(isMilestoneActive("stage4"))
+        setStat("resKnow4", frontierResearchBonus());
+
     // 知识边界:软上限使知识生产除以的倍数(原始速度/受限后速度,未超限=1)
     setStat("knowledgeCap", knowledgeCapDivisor());
+
+    // 论文升级"摘要":知识边界倍率与当前知识边界值
+    setStat("summaryMult", summaryBoundaryBonus());
+    setStat("limitVal", knowledgeLimit());
 
     // 理论力量
     for(let id in game.theories){
@@ -295,7 +316,7 @@ function updateStatVals(){
 // 生涯累计数据,部分行按游戏进度解锁显示:
 //   基础   : 游戏时间 / 累计生产知识(开局即显示)
 //   想法解锁后 : 累计获得想法 / 历史最高想法
-//   研究解锁后 : 累计获得研究点 / 研究重置次数
+//   研究解锁后 : 累计获得行动点 / 研究重置次数
 //   研究重置后 : 最快研究重置用时
 //   研究阶段3后: 实验完成总次数
 // ============================================================
@@ -384,7 +405,7 @@ function renderGameStats(){
 
         if(showResearch){
             html +=
-            '<div class="game-stat">你累计获得了<span class="stat-val gs-totalap"></span>研究点</div>' +
+            '<div class="game-stat">你累计获得了<span class="stat-val gs-totalap"></span>行动点</div>' +
             '<div class="game-stat">你一共进行了<span class="stat-val gs-resets"></span>次研究重置</div>';
         }
 

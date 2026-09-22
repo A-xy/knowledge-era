@@ -439,6 +439,165 @@ color:#123;
 }
 
 
+/* ---------- 前沿领域(研究阶段4) ---------- */
+
+/* 游戏标题下方的"你现在正在前沿领域中"提示 */
+#frontierBanner{
+
+margin:6px 0;
+
+font-size:15px;
+
+font-weight:bold;
+
+color:#a9d6ff;
+
+}
+
+.fr-res{
+
+font-size:15px;
+
+margin:8px 0;
+
+color:#ddd;
+
+}
+
+.fr-rate-wrap{
+
+font-size:13px;
+
+color:#8ab;
+
+margin-left:6px;
+
+}
+
+.fr-warn{
+
+font-size:14px;
+
+color:#e6b45c;
+
+margin:8px 0;
+
+}
+
+.fr-toggle-btn{
+
+display:block;
+
+margin:12px auto;
+
+padding:10px 26px;
+
+font-size:15px;
+
+border-radius:10px;
+
+border:1px solid #4a9aaa;
+
+background:#1c4a52;
+
+color:#dff;
+
+cursor:pointer;
+
+}
+
+.fr-toggle-btn:hover{
+
+background:#2a6a72;
+
+}
+
+.fr-toggle-btn.active{
+
+background:#7a4a1c;
+
+border-color:#d09a4a;
+
+color:#ffe;
+
+}
+
+.fr-toggle-btn.active:hover{
+
+background:#9a5a20;
+
+}
+
+/* 论文卡片 */
+.paper-card{
+
+background:#122a22;
+
+border:1px solid #2a6a4a;
+
+border-radius:12px;
+
+padding:12px;
+
+margin:10px 0;
+
+}
+
+.paper-card.owned{
+
+border-color:#5a9a7a;
+
+}
+
+.paper-head{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+font-size:15px;
+
+}
+
+.paper-name{
+
+font-weight:bold;
+
+color:#cfd;
+
+}
+
+.paper-price{
+
+color:#8ab;
+
+font-size:13px;
+
+}
+
+.paper-desc{
+
+font-size:14px;
+
+color:#ccc;
+
+margin:6px 0;
+
+text-align:left;
+
+}
+
+.paper-state{
+
+font-size:13px;
+
+color:#7fd0a0;
+
+}
+
+
 
 .theory{
 

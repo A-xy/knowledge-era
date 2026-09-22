@@ -18,26 +18,43 @@ const RESEARCH_CONFIG = {
     actionExp: 1/20,    // 行动点公式指数
     actionMin: 5,       // 行动点最低值
     bonusCap: 10,       // 里程碑加成上限(重置次数,最大10)
-    designedStages: 3,  // 已设计的研究阶段数(超出则显示"后续研究阶段待更新")
     // "高速研究"成就:相邻两次研究重置的游戏时间间隔 ≤ 该值(秒)即达成。
     // 成就描述文本由 achievements.js 引用此值生成,改这里即可同步。
-    fastResearchWindow: 30
+    fastResearchWindow: 30,
+    // 阶段需求公式:第 n(n≥4)个研究阶段需要 12 + 4n 想法
+    stageFormulaBase: 12,
+    stageFormulaStep: 4
 };
 
 
-// 各研究阶段所需的想法数(索引 i 对应"进入第 i+1 阶段")
+// 各研究阶段所需的想法数
+// 阶段1~3 为早期手调值;阶段4 起统一按公式 12+4n(n = 阶段序号)计算。
+// 例:阶段4 = 12+16 = 28,阶段5 = 32,阶段6 = 36 …
 const RESEARCH_STAGE_REQUIREMENTS = [
     12,      // 进入阶段1 需要 12 想法
     16,      // 进入阶段2 需要 16 想法
-    24,      // 进入阶段3 需要 24 想法
-    1e100    // 进入阶段4 需要(暂不可达)
+    24       // 进入阶段3 需要 24 想法
 ];
+
+
+// 第 n 个研究阶段所需的想法数(1 起算)
+// 超出 RESEARCH_STAGE_REQUIREMENTS 的部分走公式 12+4n
+function stageRequirement(n){
+
+    if(n >= 1 && n <= RESEARCH_STAGE_REQUIREMENTS.length)
+        return RESEARCH_STAGE_REQUIREMENTS[n - 1];
+
+    return RESEARCH_CONFIG.stageFormulaBase
+    + RESEARCH_CONFIG.stageFormulaStep * n;
+
+}
 
 
 // 里程碑列表(按阶段顺序)
 // id: 唯一标识  stage: 点亮所需的阶段
 // name/desc: 显示文本
 // 命名约定:阶段1=基础研究,阶段2=跨学科研究(从实验3起为非物理主题)
+//          阶段3=自动化研究,阶段4=前沿研究(前沿领域)
 const RESEARCH_MILESTONES = [
     {
         id: "stage1",
@@ -56,6 +73,12 @@ const RESEARCH_MILESTONES = [
         stage: 3,
         name: "自动化研究",
         desc: "允许重复完成实验,并解锁自动实验助手"
+    },
+    {
+        id: "stage4",
+        stage: 4,
+        name: "前沿研究",
+        desc: "基于累计获得的行动点总数,加成知识获取"
     }
 ];
 
@@ -73,14 +96,10 @@ function canResearchReset(){
 
 
 // 下一个研究阶段的解锁想法数(当前阶段对应)
-// researchStage=0 → 阶段1(12);researchStage=1 → 阶段2(1e100)...
+// researchStage=0 → 阶段1(12);researchStage=1 → 阶段2(16) …
+// 阶段4 起按公式 12+4n 计算(永不封顶,可继续推进)
 function nextStageIdeas(){
-
-    if(game.researchStage < RESEARCH_STAGE_REQUIREMENTS.length)
-        return RESEARCH_STAGE_REQUIREMENTS[game.researchStage];
-
-    return Infinity;
-
+    return stageRequirement(game.researchStage + 1);
 }
 
 
@@ -167,53 +186,53 @@ function researchPowerBonus(){
 }
 
 
-// 执行研究重置
-// 重置:知识、理论、想法、元力量
-// 获得:行动点(基于重置前知识)、推进研究阶段
-function researchReset(){
+// 里程碑 stage4(前沿研究):基于累计获得的行动点总数加成知识获取
+// 公式:知识获取速率 ×(1 + 累计行动点)^2;未点亮时 ×1
+function frontierResearchBonus(){
 
-    if(!canResearchReset())
-        return;
+    if(!isMilestoneActive("stage4"))
+        return new Decimal(1);
 
-    // 记录重置前状态(用于结算)
-    let resetIdeas = game.ideas;
-    let gainedAP = actionPointsGain();
+    let base =
+    new Decimal(1)
+    .add(game.totalResearchPoints || new Decimal(0));
+
+    // 用自乘代替 pow(2):整数次幂下精度无损
+    return base.mul(base);
+
+}
+
+
+// 研究重置的核心状态变更(供普通研究重置 / 前沿领域进出共用)
+// 行动点在重置前按当前知识结算,之后才清空知识/理论/想法/元-力量。
+// gainAP       : 是否获得行动点(不足 12 想法时的前沿重置不获得)
+// advanceStage : 是否可能推进研究阶段
+// 返回本次获得的行动点
+function applyResearchResetCore(gainAP, advanceStage){
+
+    let gainedAP =
+    gainAP
+    ? actionPointsGain()
+    : new Decimal(0);
 
     // 推进研究阶段:若重置时想法数达到当前阶段要求
     // researchStage 从 0 开始:第一次(12想法) → 阶段1
-    if(resetIdeas >= nextStageIdeas())
+    if(advanceStage
+        && game.ideas >= nextStageIdeas())
         game.researchStage++;
 
-    // 研究重置次数 +1(里程碑加成依据)
-    game.researchResets++;
+    if(gainedAP.gt(0)){
 
-    // 高速研究成就计时:与上次研究重置的游戏时间间隔 ≤ 阈值(默认30秒)
-    // (首次重置无上次记录,不计;达成一次即永久解锁)
-    let nowTime = game.totalTime || 0;
-    if(game.lastResearchResetTime !== null
-        && nowTime - game.lastResearchResetTime
-            <= RESEARCH_CONFIG.fastResearchWindow)
-        game.fastResearchFlag = true;
+        // 获得行动点
+        game.actionPoints =
+        game.actionPoints.add(gainedAP);
 
-    // 生涯统计:最快研究重置用时(相邻两次重置的游戏时间间隔;首次无上次不计)
-    if(game.lastResearchResetTime !== null){
-        let gap = nowTime - game.lastResearchResetTime;
-        if(game.fastestResearchReset === null
-            || game.fastestResearchReset === undefined
-            || gap < game.fastestResearchReset)
-            game.fastestResearchReset = gap;
+        // 生涯统计:累计获得的行动点(消费不影响)
+        game.totalResearchPoints =
+        (game.totalResearchPoints || new Decimal(0))
+        .add(gainedAP);
+
     }
-
-    game.lastResearchResetTime = nowTime;
-
-    // 获得行动点
-    game.actionPoints =
-    game.actionPoints.add(gainedAP);
-
-    // 生涯统计:累计获得的研究点(行动点总获得量;消费不影响)
-    game.totalResearchPoints =
-    (game.totalResearchPoints || new Decimal(0))
-    .add(gainedAP);
 
     // 重置知识(成就"新篇之始"达成后:保留 10 知识)
     game.knowledge =
@@ -241,6 +260,44 @@ function researchReset(){
     game.metaPower =
     new Decimal(0);
 
+    return gainedAP;
+
+}
+
+
+// 执行研究重置
+// 重置:知识、理论、想法、元力量
+// 获得:行动点(基于重置前知识)、推进研究阶段
+// 同时计入研究重置次数(里程碑 stage1 依据)、刷新最快重置用时、可触发"高速研究"
+function researchReset(){
+
+    if(!canResearchReset())
+        return;
+
+    applyResearchResetCore(true, true);
+
+    // 研究重置次数 +1(里程碑加成依据)
+    game.researchResets++;
+
+    // 高速研究成就计时:与上次研究重置的游戏时间间隔 ≤ 阈值(默认30秒)
+    // (首次重置无上次记录,不计;达成一次即永久解锁)
+    let nowTime = game.totalTime || 0;
+    if(game.lastResearchResetTime !== null
+        && nowTime - game.lastResearchResetTime
+            <= RESEARCH_CONFIG.fastResearchWindow)
+        game.fastResearchFlag = true;
+
+    // 生涯统计:最快研究重置用时(相邻两次重置的游戏时间间隔;首次无上次不计)
+    if(game.lastResearchResetTime !== null){
+        let gap = nowTime - game.lastResearchResetTime;
+        if(game.fastestResearchReset === null
+            || game.fastestResearchReset === undefined
+            || gap < game.fastestResearchReset)
+            game.fastestResearchReset = gap;
+    }
+
+    game.lastResearchResetTime = nowTime;
+
     // 保存
     saveGame();
 
@@ -259,6 +316,7 @@ function researchReset(){
     renderTheories();
     renderIdeaPage();
     renderResearchPage();
+    renderFrontierPage();
 
 }
 
@@ -319,8 +377,8 @@ function renderResearchPage(){
 
     // 下个研究阶段信息:
     // 未达到阶段1 → 不显示
-    // 达到阶段1 且后面还有已设计阶段 → 显示两行(需要想法数 / 当前想法)
-    // 没有已设计阶段 → 显示一行"后续研究阶段待更新"
+    // 达到阶段1 → 显示两行(下个阶段所需想法数 / 当前想法)
+    // 阶段需求由 stageRequirement 计算:阶段4 起按公式 12+4n,可继续推进
     let nextBox =
     document.getElementById(
         "researchNextStage"
@@ -332,7 +390,7 @@ function renderResearchPage(){
 
             nextBox.style.display = "none";
 
-        }else if(game.researchStage < RESEARCH_CONFIG.designedStages){
+        }else{
 
             nextBox.style.display = "block";
 
@@ -341,13 +399,6 @@ function renderResearchPage(){
             "<b>" + nextStageIdeas() + " 想法</b></p>" +
             "<p>当前想法:" +
             "<b>" + game.ideas + " / " + nextStageIdeas() + "</b></p>";
-
-        }else{
-
-            nextBox.style.display = "block";
-
-            nextBox.innerHTML =
-            "<p>后续研究阶段待更新</p>";
 
         }
 
@@ -361,6 +412,9 @@ function renderResearchPage(){
 
     // 实验页面渲染
     renderExperimentPage();
+
+    // 前沿领域页面渲染(阶段4 解锁)
+    renderFrontierPage();
 
 }
 
@@ -478,6 +532,13 @@ function milestoneDesc(m){
     if(m.id === "stage3"){
 
         return "允许重复完成实验(重新开始会保留升级状态);解锁自动实验助手";
+    }
+
+    if(m.id === "stage4"){
+
+        return "知识获取 ×(1+累计行动点)^2 | 当前 ×" +
+        format(frontierResearchBonus()) +
+        " ； 解锁前沿领域";
     }
 
     return m.desc;

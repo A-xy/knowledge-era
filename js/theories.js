@@ -121,6 +121,10 @@ function theoryVisible(id){
         id.replace("theory","")
     );
 
+    // 前沿领域:理论2~5 被禁用(不显示、无法解锁)
+    if(frontierActive() && num >= 2)
+        return false;
+
     //理论1默认显示
     if(num===1)
         return true;
@@ -129,6 +133,19 @@ function theoryVisible(id){
     return game.theories[
         "theory"+(num-1)
     ].unlocked;
+}
+
+
+// 理论在前沿领域中是否被禁用(2~5)
+function theoryDisabled(id){
+
+    if(!frontierActive())
+        return false;
+
+    return Number(
+        id.replace("theory","")
+    ) >= 2;
+
 }
 
 
@@ -141,6 +158,10 @@ function unlockTheory(id){
     theoryData[id];
 
     if(t.unlocked)
+        return;
+
+    // 前沿领域:理论2~5 不可用
+    if(theoryDisabled(id))
         return;
 
     if(game.knowledge.gte(data.cost)){
@@ -166,6 +187,10 @@ function upgradeTheory(id){
     game.theories[id];
 
     if(!t.unlocked)
+        return;
+
+    // 前沿领域:理论2~5 不可用
+    if(theoryDisabled(id))
         return;
 
     //升级价格
@@ -323,23 +348,31 @@ new Decimal("1.79e308");
 
 
 // 原始知识速度是否已超越边界(用于显示"已超越边界"提示)
+// 边界取 knowledgeLimit()(含论文升级"摘要"的加成,见 frontier.js)
 function knowledgeBeyondLimit(speed){
-    return speed.gt(KNOWLEDGE_LIMIT);
+    return speed.gt(knowledgeLimit());
 }
 
 
 // 知识边界软上限(输入原始速度,返回受限后的最终速度)
+// capped = 边界 × sqrt(speed / 边界)
 function knowledgeSoftCap(speed){
-    if(!knowledgeBeyondLimit(speed))
+
+    let limit =
+    knowledgeLimit();
+
+    if(!speed.gt(limit))
         return speed;
-    return KNOWLEDGE_LIMIT.mul(
-        speed.div(KNOWLEDGE_LIMIT).sqrt()
+
+    return limit.mul(
+        speed.div(limit).sqrt()
     );
+
 }
 
 
 // 软上限使知识生产除以的倍数 = 原始速度 / 受限后速度
-// 未超限时为 1(÷1,不受影响);超限后为 sqrt(raw/LIMIT)(>1)
+// 未超限时为 1(÷1,不受影响);超限后为 sqrt(raw/limit)(>1)
 function knowledgeCapDivisor(){
     let raw = knowledgeRawSpeed();
     let capped = knowledgeSoftCap(raw);
@@ -349,6 +382,7 @@ function knowledgeCapDivisor(){
 
 // 计算原始知识速度(各种加成之后、软上限之前)
 // 里程碑 stage1 解锁后:知识获取 ×(1 + 研究重置次数,最大10)
+// 里程碑 stage4(前沿研究):知识获取 ×(1 + 累计行动点)^2
 function knowledgeRawSpeed(){
     let speed =
     new Decimal(1);
@@ -374,6 +408,14 @@ function knowledgeRawSpeed(){
         speed =
         speed.mul(
             researchPowerBonus()
+        );
+    }
+
+    // 研究里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    if(isMilestoneActive("stage4")){
+        speed =
+        speed.mul(
+            frontierResearchBonus()
         );
     }
 

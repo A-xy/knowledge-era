@@ -211,13 +211,27 @@ async function importSave(){
         if(game.fastestResearchReset === undefined)
             game.fastestResearchReset = null;
 
-        // 兼容旧存档:三段后期剧情标记
+        // 兼容旧存档:后期剧情标记
         if(game.firstResetHelperStorySeen === undefined)
             game.firstResetHelperStorySeen = false;
         if(game.stage3AutoStorySeen === undefined)
             game.stage3AutoStorySeen = false;
         if(game.knowledgeLimitStorySeen === undefined)
             game.knowledgeLimitStorySeen = false;
+        if(game.stage4FrontierStorySeen === undefined)
+            game.stage4FrontierStorySeen = false;
+
+        // 兼容旧存档:前沿领域(阶段4)
+        // frontierActive:是否处于前沿领域;inspiration:灵感;summaryUnlocked:论文"摘要"
+        if(game.frontierActive === undefined)
+            game.frontierActive = false;
+        if(game.inspiration === undefined)
+            game.inspiration = new Decimal(0);
+        else
+            game.inspiration =
+            new Decimal(game.inspiration);
+        if(game.summaryUnlocked === undefined)
+            game.summaryUnlocked = false;
 
         // 兼容旧存档:研究系统字段
         if(game.researchStage === undefined)
@@ -412,13 +426,26 @@ function loadGame(){
     if(game.fastestResearchReset === undefined)
         game.fastestResearchReset = null;
 
-    // 三段后期剧情标记
+    // 后期剧情标记
     if(game.firstResetHelperStorySeen === undefined)
         game.firstResetHelperStorySeen = false;
     if(game.stage3AutoStorySeen === undefined)
         game.stage3AutoStorySeen = false;
     if(game.knowledgeLimitStorySeen === undefined)
         game.knowledgeLimitStorySeen = false;
+    if(game.stage4FrontierStorySeen === undefined)
+        game.stage4FrontierStorySeen = false;
+
+    // 前沿领域(阶段4)
+    if(game.frontierActive === undefined)
+        game.frontierActive = false;
+    if(game.inspiration === undefined)
+        game.inspiration = new Decimal(0);
+    else
+        game.inspiration =
+        new Decimal(game.inspiration);
+    if(game.summaryUnlocked === undefined)
+        game.summaryUnlocked = false;
 
     // 兼容旧存档:研究系统字段
     if(game.researchStage === undefined)

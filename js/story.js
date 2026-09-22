@@ -166,6 +166,34 @@ const knowledgeLimitStoryLines=[
 ];
 
 
+// 达到研究阶段4 的剧情(介绍前沿领域)
+const stage4FrontierStoryLines=[
+
+
+"研究阶段 4 —— 你决定做一些真正创新的事情。",
+
+
+"不再沿着已有的理论走下去，而是去探索前沿的研究领域。",
+
+
+"但在前沿领域中，一些理论会变得不再适用。",
+
+
+"只有最基础的理论依然有效，其余的理论都将失效。",
+
+
+"作为交换，你可以在探索中获得灵感。",
+
+
+"灵感可以用于完成论文，为你带来各种各样的加成。",
+
+
+"准备好走出已知的边界了吗？"
+
+
+];
+
+
 // 当前正在播放的剧情(开局或想法)
 let currentStoryLines = storyLines;
 
@@ -286,6 +314,14 @@ playStoryLines(stage3AutoStoryLines);
 function showKnowledgeLimitStory(){
 
 playStoryLines(knowledgeLimitStoryLines);
+
+}
+
+
+// 播放"研究阶段4"剧情(介绍前沿领域)
+function showStage4FrontierStory(){
+
+playStoryLines(stage4FrontierStoryLines);
 
 }
 

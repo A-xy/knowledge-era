@@ -110,6 +110,7 @@ global.alert = () => {}; global.confirm = () => true; global.location = { reload
  'knowledgePage','ideaPage','researchPage','timePage','timePanel','timeDebugHint','achievementPage','savePage',
  'aboutPage','aboutIntroPage','aboutChangelogPage','aboutIntroPanel','about-subnav',
  'researchStageVal','researchAP','researchNeed','researchProgress','researchAPGain',
+ 'researchFrontierPage','frontierPanel','frontierNavTab','frontierBanner','knowledgeLimitVal',
  'researchResetBtn','researchMilestones','researchStagePage','researchHelperPage',
  'researchExperimentPage','research-subnav','researchNavBtn','metaEffects','researchHelpers',
  'exp1Status','exp1Err','exp1UpgradeBtn','exp1MeasureBtn','exp1SubmitBtn','exp1MeasureU','exp1SubmitU','exp1Msg','exp1Result','exp1History','exp1Stats',
@@ -135,6 +136,7 @@ runJs('js/story.js');
 runJs('js/theories.js');
 runJs('js/ideas.js');
 runJs('js/research.js');
+runJs('js/frontier.js');
 runJs('js/experiment.js');
 runJs('js/save.js');
 runJs('js/achievements.js');

@@ -41,9 +41,19 @@ researchStorySeen:false,
 // firstResetHelperStorySeen: 第一次研究重置后(助手与实验介绍)
 // stage3AutoStorySeen: 达到研究阶段3(重复实验与自动实验助手介绍)
 // knowledgeLimitStorySeen: 知识速度达 1.79e308/s(知识边界介绍)
+// stage4FrontierStorySeen: 达到研究阶段4(前沿领域介绍)
 firstResetHelperStorySeen:false,
 stage3AutoStorySeen:false,
 knowledgeLimitStorySeen:false,
+stage4FrontierStorySeen:false,
+
+// 前沿领域(研究阶段4 解锁)
+// frontierActive : 是否处于前沿领域中(理论2~5 不可用,但会产出灵感)
+// inspiration    : 灵感(与知识获取速率相同速率增长;不随研究重置清空)
+// summaryUnlocked: 论文升级"摘要"是否已购买(提高知识边界)
+frontierActive:false,
+inspiration:new Decimal(0),
+summaryUnlocked:false,
 
 // 成就系统:已达成成就登记 { id: true }
 achievements:{},

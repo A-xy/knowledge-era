@@ -371,7 +371,8 @@ function formatOfflineTime(sec){
     let subMap = {
         stage: "researchStagePage",
         helper: "researchHelperPage",
-        experiment: "researchExperimentPage"
+        experiment: "researchExperimentPage",
+        frontier: "researchFrontierPage"
     };
 
     subNav.addEventListener("click", function(e){
@@ -533,6 +534,9 @@ updateExperiment2Time(dt);
 // 自动实验助手:生产实验完成次数(研究阶段3 解锁,启用时)
 updateExpAutoAssistants(dt);
 
+// 前沿领域:以与知识获取速率相同的速率累计灵感(仅前沿领域中)
+updateFrontier(dt);
+
 
 // 助手:理论研究员——自动解锁和升级理论
 if(isAssistantEnabled("theorist")){
@@ -566,11 +570,20 @@ document
 format(speed);
 
 
-// 知识边界提示:原始知识速度(软上限前)超过 1.79e308/s 时显示
+// 知识边界提示:原始知识速度(软上限前)超过当前知识边界时显示
+// 边界值受论文升级"摘要"影响,因此这里同步刷新显示的边界数值
 let limitNotice =
 document.getElementById(
     "knowledgeLimit"
 );
+
+let limitValEl =
+document.getElementById(
+    "knowledgeLimitVal"
+);
+
+if(limitValEl)
+    limitValEl.innerText = format(knowledgeLimit());
 
 if(limitNotice){
 
@@ -642,6 +655,20 @@ if(!game.knowledgeLimitStorySeen
     saveGame();
 
     showKnowledgeLimitStory();
+
+    return;
+
+}
+
+// 研究阶段4:介绍前沿领域
+if(game.researchStage >= 4
+    && !game.stage4FrontierStorySeen){
+
+    game.stage4FrontierStorySeen = true;
+
+    saveGame();
+
+    showStage4FrontierStory();
 
     return;
 
