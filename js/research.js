@@ -1055,12 +1055,43 @@ function renderResearchHelpers(){
 
                 let target = e && e.target ? e.target : null;
 
+                let tag =
+                (target && target.tagName)
+                ? String(target.tagName).toUpperCase()
+                : "";
+
+                // 阈值输入框(及 label/textarea)→ 不触发开关切换
+                if(tag === "INPUT"
+                    || tag === "TEXTAREA"
+                    || tag === "LABEL"
+                    || tag === "SELECT")
+                    return;
+
+                let cls =
+                (target && target.classList)
+                ? target.classList
+                : null;
+
+                // 卡片上除按钮以外的区域(描述文字、阈值提示行等)→ 忽略
+                let isBtn =
+                !!cls && cls.contains("assistant-btn");
+
+                if(!isBtn)
+                    return;
+
                 // 升级按钮
-                if(target && target.classList.contains("upgrade")){
+                if(cls.contains("upgrade")){
                     upgradeExpAutoAssistant(key);
                     return;
                 }
 
+                // 解锁按钮(未解锁时的 assistant-btn,无 toggle 类)
+                if(!cls.contains("toggle")){
+                    unlockAssistant(key);
+                    return;
+                }
+
+                // 开关按钮
                 if(!a.unlocked){
                     unlockAssistant(key);
                 }else{
