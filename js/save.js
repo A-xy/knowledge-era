@@ -222,7 +222,8 @@ async function importSave(){
             game.stage4FrontierStorySeen = false;
 
         // 兼容旧存档:前沿领域(阶段4)
-        // frontierActive:是否处于前沿领域;inspiration:灵感;summaryUnlocked:论文"摘要"
+        // frontierActive:是否处于前沿领域;inspiration:灵感;
+        // summaryUnlocked / introUnlocked:论文"摘要"/"引言"
         if(game.frontierActive === undefined)
             game.frontierActive = false;
         if(game.inspiration === undefined)
@@ -232,6 +233,8 @@ async function importSave(){
             new Decimal(game.inspiration);
         if(game.summaryUnlocked === undefined)
             game.summaryUnlocked = false;
+        if(game.introUnlocked === undefined)
+            game.introUnlocked = false;
 
         // 兼容旧存档:研究系统字段
         if(game.researchStage === undefined)
@@ -446,6 +449,8 @@ function loadGame(){
         new Decimal(game.inspiration);
     if(game.summaryUnlocked === undefined)
         game.summaryUnlocked = false;
+    if(game.introUnlocked === undefined)
+        game.introUnlocked = false;
 
     // 兼容旧存档:研究系统字段
     if(game.researchStage === undefined)

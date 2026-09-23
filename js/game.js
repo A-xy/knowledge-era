@@ -51,9 +51,11 @@ stage4FrontierStorySeen:false,
 // frontierActive : 是否处于前沿领域中(理论2~5 不可用,但会产出灵感)
 // inspiration    : 灵感(与知识获取速率相同速率增长;不随研究重置清空)
 // summaryUnlocked: 论文升级"摘要"是否已购买(提高知识边界)
+// introUnlocked  : 论文升级"引言"是否已购买(解锁新的元-力量效果)
 frontierActive:false,
 inspiration:new Decimal(0),
 summaryUnlocked:false,
+introUnlocked:false,
 
 // 成就系统:已达成成就登记 { id: true }
 achievements:{},

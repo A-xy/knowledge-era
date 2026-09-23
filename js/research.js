@@ -197,8 +197,8 @@ function frontierResearchBonus(){
     new Decimal(1)
     .add(game.totalResearchPoints || new Decimal(0));
 
-    // 用自乘代替 pow(2):整数次幂下精度无损
-    return base.mul(base);
+    // 公式已调整为1+totalAP
+    return base;
 
 }
 

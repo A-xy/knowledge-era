@@ -12,22 +12,58 @@
 //   以与知识获取速率相同的速率获得"灵感"(详见 updateFrontier)
 //   灵感不随研究重置清空(长期资源)
 //
-// 灵感用于编写论文(论文升级):
-//   摘要 —— 消耗 1e30 灵感解锁;此后知识边界 ×sqrt(1+灵感)
+// 灵感用于编写论文(论文升级,配置见 FRONTIER_CONFIG.papers):
+//   摘要 —— 消耗 1e36 灵感解锁;此后知识边界 ×sqrt(1+灵感)
+//   引言 —— 消耗 1e50 灵感解锁;解锁新的元-力量效果
 // ============================================================
 
 
 // ============================================================
 // 配置
 // ============================================================
+
+// 论文升级列表(按此顺序展示)
+// 购买状态存放于 game.<key>Unlocked(如 game.summaryUnlocked)
+// 新增论文只需在此追加一项
 const FRONTIER_CONFIG = {
-    // 论文升级:摘要
-    summary: {
-        name: "摘要",
-        cost: new Decimal("1e30"),
-        desc: "基于灵感,提高知识边界(知识边界 × sqrt(1+灵感))"
-    }
+    papers: [
+        {
+            key: "summary",
+            name: "摘要",
+            cost: new Decimal("1e36"),
+            desc: "基于灵感,提高知识边界(知识边界 × sqrt(1+灵感))"
+        },
+        {
+            key: "intro",
+            name: "引言",
+            cost: new Decimal("1e50"),
+            desc: "解锁新的元-力量效果"
+        }
+    ]
 };
+
+
+// 按 key 取论文配置(找不到返回 null)
+function paperConfig(key){
+
+    for(let i = 0;
+        i < FRONTIER_CONFIG.papers.length;
+        i++){
+
+        if(FRONTIER_CONFIG.papers[i].key === key)
+            return FRONTIER_CONFIG.papers[i];
+
+    }
+
+    return null;
+
+}
+
+
+// 某篇论文是否已完成(购买状态字段:game.<key>Unlocked)
+function paperOwned(key){
+    return !!game[key + "Unlocked"];
+}
 
 
 // 前沿领域是否已解锁(成就"求知":达到研究阶段4)
@@ -91,7 +127,13 @@ function updateFrontier(dt){
 
 // 摘要是否已购买
 function summaryUnlocked(){
-    return !!game.summaryUnlocked;
+    return paperOwned("summary");
+}
+
+
+// 引言是否已购买(解锁新的元-力量效果)
+function introUnlocked(){
+    return paperOwned("intro");
 }
 
 
@@ -189,21 +231,26 @@ function toggleFrontier(){
 // 论文升级
 // ============================================================
 
-// 购买"摘要"(一次性;效果随当前灵感动态变化)
-function buySummary(){
+// 购买一篇论文(一次性;摘要的效果随当前灵感动态变化)
+// 返回: "ok" | "owned"(已完成) | "noinspiration"(灵感不足) | "none"(无此论文)
+function buyPaper(key){
 
-    if(summaryUnlocked())
+    let conf =
+    paperConfig(key);
+
+    if(!conf)
+        return "none";
+
+    if(paperOwned(key))
         return "owned";
 
-    if(frontierInspiration().lt(FRONTIER_CONFIG.summary.cost))
+    if(frontierInspiration().lt(conf.cost))
         return "noinspiration";
 
     game.inspiration =
-    frontierInspiration().sub(
-        FRONTIER_CONFIG.summary.cost
-    );
+    frontierInspiration().sub(conf.cost);
 
-    game.summaryUnlocked = true;
+    game[key + "Unlocked"] = true;
 
     saveGame();
 
@@ -214,12 +261,61 @@ function buySummary(){
 }
 
 
+// 购买"摘要"
+function buySummary(){
+    return buyPaper("summary");
+}
+
+
+// 购买"引言"
+function buyIntro(){
+    return buyPaper("intro");
+}
+
+
 // ============================================================
 // 界面渲染
 // ============================================================
 
-// 结构签名:解锁/激活/摘要 状态变化时才重建 DOM(数值每 tick 更新)
+// 结构签名:解锁/激活/论文 状态变化时才重建 DOM(数值每 tick 更新)
 let lastFrontierKey = "";
+
+
+// 生成某篇论文卡片的 HTML
+function paperCardHTML(p){
+
+    let owned =
+    paperOwned(p.key);
+
+    let html =
+    '<div class="paper-card' + (owned ? " owned" : "") + '">' +
+    '<div class="paper-head">' +
+    '<span class="paper-name">' + p.name + '</span>' +
+    '<span class="paper-price">' + format(p.cost) + ' 灵感</span>' +
+    '</div>' +
+    '<div class="paper-desc">' + p.desc + '</div>';
+
+    if(owned){
+
+        html +=
+        '<div class="paper-state">已完成</div>';
+
+    }else{
+
+        html +=
+        '<button class="assistant-btn paper-buy"' +
+        ' data-paper="' + p.key + '"' +
+        ' onclick="buyPaper(\'' + p.key + '\')">' +
+        '编写(消耗 ' + format(p.cost) + ' 灵感)' +
+        '</button>';
+
+    }
+
+    html += '</div>';
+
+    return html;
+
+}
 
 
 // 生成前沿领域面板 HTML
@@ -235,7 +331,7 @@ function buildFrontierHTML(){
 
     html +=
     '<p class="research-hint">' +
-    '在前沿领域中,大部分理论不再适用,但你能从探索中获得灵感。' +
+    '在前沿领域中,大部分理论不再适用,但你能获得和知识等量的灵感。' +
     '灵感可用于编写论文,换取各种加成。' +
     '</p>';
 
@@ -258,7 +354,7 @@ function buildFrontierHTML(){
     if(active){
         html +=
         '<p class="fr-warn">' +
-        '理论2~5 在此失效:不会显示、也无法解锁,只有基础理论有效。' +
+        '理论2~5 在此失效,只有基础理论有效。' +
         '</p>';
     }
 
@@ -275,31 +371,20 @@ function buildFrontierHTML(){
     '也不计入研究重置次数与最快重置用时。' +
     '</p>';
 
-    // 论文升级
+    // 论文升级(按配置顺序渲染)
     html +=
-    '<h3>论文</h3>' +
-    '<div class="paper-card' + (summaryUnlocked() ? " owned" : "") + '">' +
-    '<div class="paper-head">' +
-    '<span class="paper-name">' + FRONTIER_CONFIG.summary.name + '</span>' +
-    '<span class="paper-price">' + format(FRONTIER_CONFIG.summary.cost) + ' 灵感</span>' +
-    '</div>' +
-    '<div class="paper-desc">' + FRONTIER_CONFIG.summary.desc + '</div>';
+    '<h3>论文</h3>';
 
-    if(summaryUnlocked()){
+    for(let i = 0;
+        i < FRONTIER_CONFIG.papers.length;
+        i++){
 
         html +=
-        '<div class="paper-state">已完成</div>';
-
-    }else{
-
-        html +=
-        '<button class="assistant-btn" id="buySummaryBtn" onclick="buySummary()">' +
-        '编写(消耗 ' + format(FRONTIER_CONFIG.summary.cost) + ' 灵感)' +
-        '</button>';
+        paperCardHTML(
+            FRONTIER_CONFIG.papers[i]
+        );
 
     }
-
-    html += '</div>';
 
     return html;
 
@@ -346,11 +431,26 @@ function renderFrontierPage(){
     if(!panel)
         return;
 
-    let key = [
+    // 结构签名:解锁 / 激活 / 各论文完成状态
+    let keyParts = [
         frontierUnlocked() ? 1 : 0,
-        frontierActive() ? 1 : 0,
-        summaryUnlocked() ? 1 : 0
-    ].join(":");
+        frontierActive() ? 1 : 0
+    ];
+
+    for(let i = 0;
+        i < FRONTIER_CONFIG.papers.length;
+        i++){
+
+        keyParts.push(
+            paperOwned(
+                FRONTIER_CONFIG.papers[i].key
+            ) ? 1 : 0
+        );
+
+    }
+
+    let key =
+    keyParts.join(":");
 
     // 结构变化 → 重建(按钮用 onclick 内联,无需重新绑定)
     if(key !== lastFrontierKey){
@@ -375,18 +475,32 @@ function renderFrontierPage(){
     if(summaryUnlocked())
         setFrontierVal(panel, ".fr-boundary-mult", format(summaryBoundaryBonus()));
 
-    // 摘要按钮:灵感不足时禁用
-    if(!summaryUnlocked()){
+    // 论文按钮:灵感不足时禁用
+    if(panel.querySelectorAll){
 
-        let btn =
-        panel.querySelector
-        ? panel.querySelector("#buySummaryBtn")
-        : null;
+        let btns =
+        panel.querySelectorAll(".paper-buy");
 
-        if(btn){
-            let affordable =
-            frontierInspiration().gte(FRONTIER_CONFIG.summary.cost);
-            btn.disabled = !affordable;
+        for(let i = 0; i < btns.length; i++){
+
+            let btn =
+            btns[i];
+
+            let pkey =
+            (btn.dataset && btn.dataset.paper)
+            ? btn.dataset.paper
+            : null;
+
+            if(!pkey)
+                continue;
+
+            let conf =
+            paperConfig(pkey);
+
+            if(conf)
+                btn.disabled =
+                !frontierInspiration().gte(conf.cost);
+
         }
 
     }
