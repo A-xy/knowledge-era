@@ -458,19 +458,16 @@ function exp4Effect(){
     if(len <= 0)
         return 0;
 
-    if(len >= 10)
-        return 5;
+    // 首次完成效果(按最长复原片段分级)
+    let raw =
+    len >= 10 ? 5
+    : len >= 8 ? 4
+    : len >= 6 ? 3
+    : len >= 3 ? 2
+    : 1;
 
-    if(len >= 8)
-        return 4;
-
-    if(len >= 6)
-        return 3;
-
-    if(len >= 3)
-        return 2;
-
-    return 1;
+    // 论文"实验部分-参考实验4":额外加成部分 ×2(最高 5×2 = 10)
+    return raw * refExpMultiplier(4);
 
 }
 
@@ -591,7 +588,10 @@ function exp3Effect(){
     if(!src)
         return 0;
 
-    return exp3Accuracy(src.distance).effect;
+    // 首次完成效果(按偏差分级);论文"实验部分-参考实验3"使额外部分 ×2
+    // (基础 0 + 最高 5×2 = 10)
+    return exp3Accuracy(src.distance).effect
+    * refExpMultiplier(3);
 
 }
 
@@ -875,7 +875,13 @@ function exp1Exponent(){
     if(!src)
         return 1.0;
 
-    return exp1Accuracy(src.deviation).exponent;
+    // 首次完成效果 = 基础指数 1.0 + 额外部分(exponent - 1.0)
+    // 论文"实验部分-参考实验1"使额外部分 ×2(最高 1.0 + 0.5×2 = 2.0)
+    let acc =
+    exp1Accuracy(src.deviation);
+
+    return 1.0
+    + (acc.exponent - 1.0) * refExpMultiplier(1);
 
 }
 
@@ -1162,10 +1168,15 @@ function exp2Base(){
     if(!src)
         return 2;
 
-    // 多次完成实验2:底数额外 +0.1*ln(completions)(≥2 生效)
-    return exp2Accuracy(
-        src.deviation
-    ).base + exp2CompletionBonus();
+    // 首次完成效果 = 基础底数 2 + 额外部分(accuracy.base - 2)
+    // 论文"实验部分-参考实验2"使额外部分 ×2(最高 2 + 0.5×2 = 3.0)
+    // 注:多次完成加成不属于首次完成效果,不放大
+    let first =
+    exp2Accuracy(src.deviation).base;
+
+    return 2
+    + (first - 2) * refExpMultiplier(2)
+    + exp2CompletionBonus();
 
 }
 
@@ -1377,19 +1388,23 @@ function renderExperimentPage(){
 
 // 多次完成效果的具体值(根据完成次数计算)
 // 仅当 completions>=2 时被调用
+// 数值统一走 format(超过 1e6 显示为科学计数法)
 function expMultiEffectText(key, c){
 
     if(key === "exp1")
-        return "元-力量生产 ×" + c;
+        return "元-力量生产 ×" + format(c);
 
     if(key === "exp2")
-        return "元-力量底数额外 +" + (0.1 * Math.log(c)).toFixed(3);
+        return "元-力量底数额外 +" + format(0.1 * Math.log(c));
 
     if(key === "exp3")
-        return "想法花费 ÷" + new Decimal(c).pow(10).round().toString() + "(=完成次数^10)";
+        return "想法花费 ÷"
+        + format(new Decimal(c).pow(10).round())
+        + "(=完成次数^10)";
 
     if(key === "exp4")
-        return "所有理论力量生产 ×" + (c * c) + "(=完成次数²)";
+        return "所有理论力量生产 ×"
+        + format(c * c) + "(=完成次数²)";
 
     return "";
 
@@ -1460,7 +1475,7 @@ function renderExpStats(key, boxId, firstEffectDesc){
 
             html +=
             "<p class=\"exp-hint\">你已完成了 <b>" +
-            comp +
+            format(comp) +
             "</b> 次此实验,使得:" +
             expMultiEffectText(key, comp) +
             "</p>";
@@ -2545,7 +2560,15 @@ function expAddOperation(key){
 }
 
 
+// 成就"意义何在"的阈值:
+// 某个实验的完成次数达到该值后,再手动完成一次该实验即可达成
+// (完成次数主要由自动实验助手累加,故该成就要求"手动"再完成一次)
+const MANUAL_EXP_ACHIEVEMENT_THRESHOLD = 1e10;
+
+
 // 实验完成时调用:完成次数+1,记录最少操作次数
+// 注:本函数只由玩家手动提交答案触发;自动实验助手在 research.js 中
+//     直接累加 e.completions,不经过这里
 function expOnComplete(key){
 
     let e =
@@ -2555,6 +2578,10 @@ function expOnComplete(key){
         return;
 
     ensureExpStats(e);
+
+    // 成就"意义何在":该实验的完成次数已达到阈值(此时再手动完成一次)
+    if(e.completions >= MANUAL_EXP_ACHIEVEMENT_THRESHOLD)
+        game.manualExpAfterE10 = true;
 
     e.completions++;
 

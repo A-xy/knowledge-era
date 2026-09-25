@@ -194,6 +194,34 @@ const stage4FrontierStoryLines=[
 ];
 
 
+// 在前沿领域中达到 1e180 知识时的剧情(发现拓展理论)
+const theory6StoryLines=[
+
+
+"在前沿领域的研究中，你翻检着尚未被整理的资料。",
+
+
+"在一份几乎被遗忘的记录里，你发现了新的东西。",
+
+
+"那是一个全新的理论，不属于你已知的任何体系。",
+
+
+"更关键的是，它在前沿领域中依然适用。",
+
+
+"你将它命名为——拓展理论。",
+
+
+"从现在起，拓展理论在前沿领域内外都能被解锁。",
+
+
+"和以往的理论一样，它仍需要先解锁上一个理论。"
+
+
+];
+
+
 // 当前正在播放的剧情(开局或想法)
 let currentStoryLines = storyLines;
 
@@ -322,6 +350,14 @@ playStoryLines(knowledgeLimitStoryLines);
 function showStage4FrontierStory(){
 
 playStoryLines(stage4FrontierStoryLines);
+
+}
+
+
+// 播放"发现拓展理论"剧情(前沿领域中知识达到 1e180)
+function showTheory6Story(){
+
+playStoryLines(theory6StoryLines);
 
 }
 

@@ -37,25 +37,49 @@ actionPoints:new Decimal(0),
 // 是否已看过"研究解锁"剧情(仅第一次显示)
 researchStorySeen:false,
 
-// 三段后期剧情标记(仅各触发一次):
+// 后期剧情标记(仅各触发一次):
 // firstResetHelperStorySeen: 第一次研究重置后(助手与实验介绍)
 // stage3AutoStorySeen: 达到研究阶段3(重复实验与自动实验助手介绍)
 // knowledgeLimitStorySeen: 知识速度达 1.79e308/s(知识边界介绍)
 // stage4FrontierStorySeen: 达到研究阶段4(前沿领域介绍)
+// theory6StorySeen: 在前沿领域中达到 1e180 知识(发现拓展理论)
+//   该标记同时作为"拓展理论已发现"的开关,不随研究重置清空
 firstResetHelperStorySeen:false,
 stage3AutoStorySeen:false,
 knowledgeLimitStorySeen:false,
 stage4FrontierStorySeen:false,
+theory6StorySeen:false,
 
 // 前沿领域(研究阶段4 解锁)
 // frontierActive : 是否处于前沿领域中(理论2~5 不可用,但会产出灵感)
 // inspiration    : 灵感(与知识获取速率相同速率增长;不随研究重置清空)
-// summaryUnlocked: 论文升级"摘要"是否已购买(提高知识边界)
-// introUnlocked  : 论文升级"引言"是否已购买(解锁新的元-力量效果)
+// 论文升级解锁状态(每个升级一个 <key>Unlocked 字段,key 见 FRONTIER_CONFIG.papers;
+// 同一行的升级只能获取一个,具体花费与额外条件以调用方配置为准):
+// summaryUnlocked            摘要                —— 提高知识边界
+// introUnlocked              引言                —— 解锁新的元-力量效果
+// legacyTheoryUnlocked       理论部分-关联旧理论  —— 元-力量效果2 提升
+// experimentOrientedUnlocked 理论部分-实验导向    —— 实验助手速度加成
+// innovationUnlocked         理论部分-注重创新    —— 灵感提升知识获取
+// refExp1~4Unlocked          实验部分-参考实验1~4 —— 对应实验的首次完成效果变为2倍
+// conclusionUnlocked         结论                —— 占位(效果待定)
+// refLegacyTheoryUnlocked    参考文献-引用旧理论  —— 理论1~5 的乘积 ^1.1
+// refTheory6Unlocked         参考文献-引用理论6   —— 理论6 的乘积 ^1.3
+// refExperimentUnlocked      参考文献-引用实验成果 —— 行动点公式指数 0.05 → 0.06
 frontierActive:false,
 inspiration:new Decimal(0),
 summaryUnlocked:false,
 introUnlocked:false,
+legacyTheoryUnlocked:false,
+experimentOrientedUnlocked:false,
+innovationUnlocked:false,
+refExp1Unlocked:false,
+refExp2Unlocked:false,
+refExp3Unlocked:false,
+refExp4Unlocked:false,
+conclusionUnlocked:false,
+refLegacyTheoryUnlocked:false,
+refTheory6Unlocked:false,
+refExperimentUnlocked:false,
 
 // 成就系统:已达成成就登记 { id: true }
 achievements:{},
@@ -64,6 +88,10 @@ achievements:{},
 totalTime:0,
 lastResearchResetTime:null,
 fastResearchFlag:false,
+
+// 成就"意义何在":某个实验的完成次数达到阈值后,又手动完成过一次
+// (由 experiment.js 的 expOnComplete() 置位;自动实验助手不计入)
+manualExpAfterE10:false,
 
 // 生涯统计(游戏统计页;累计值不清零,供跨重置展示)
 // totalKnowledgeProduced:累计生产的知识总量
@@ -75,12 +103,14 @@ totalKnowledgeProduced:new Decimal(0),
 totalIdeas:0,
 maxIdeas:0,
 totalResearchPoints:new Decimal(0),
+// 上次研究重置实际获得的行动点(研究总结员·倍数模式的判断依据;null=尚无记录)
+lastResearchAPGain:null,
 fastestResearchReset:null,
 
 // 助手系统(消耗行动点解锁,解锁后可用开关控制)
 // theorist: 理论研究员——自动解锁和升级理论
 // ideaSorter: 想法整理员——自动进行想法重置
-// researchSummarizer: 研究总结员——自动进行研究重置(阈值 AP)
+// researchSummarizer: 研究总结员——自动进行研究重置(阈值模式/倍数模式)
 assistants:{
 theorist:{
 unlocked:false,
@@ -91,9 +121,13 @@ unlocked:false,
 enabled:true
 },
 researchSummarizer:{
-unlocked:false,
-enabled:true,
-threshold:5
+// 触发条件由 mode 决定(字符串设置值,支持科学计数法):
+//     "threshold"(默认)  重置可获得 ≥ threshold 行动点 时自动重置
+//     "multiple"         重置可获得 ≥ 上次重置所得 × multiplier 时自动重置
+//                        (达成成就"项目迭代"后解锁)
+threshold:"5",
+multiplier:"2",
+mode:"threshold"
 },
 expAuto1:{
 unlocked:false,
@@ -161,6 +195,13 @@ power:new Decimal(1)
 
 
 theory5:{
+unlocked:false,
+level:0,
+power:new Decimal(1)
+},
+
+
+theory6:{
 unlocked:false,
 level:0,
 power:new Decimal(1)

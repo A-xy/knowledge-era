@@ -5,6 +5,7 @@
 //   研究 : 完成解锁研究的成就(整理一下想法?,12 想法)
 //   助手/实验 : 研究重置一次后
 //   阶段3追加内容 : 达到研究阶段3(助手/实验的补充说明)
+//   前沿领域 : 达到研究阶段4
 // 更新日志为静态内容,直接写在 index.html 中。
 // ============================================================
 
@@ -20,8 +21,20 @@ function aboutKey(){
     return [
         isAchievementUnlocked("idea12") ? 1 : 0,
         game.researchResets >= 1 ? 1 : 0,
-        game.researchStage >= 3 ? 1 : 0
+        game.researchStage >= 3 ? 1 : 0,
+        // 研究阶段4:显示"前沿领域"主题
+        game.researchStage >= 4 ? 1 : 0,
+        // 发现拓展理论(理论6)后,"理论共有几种"的文案要跟着变
+        theoryKindCount()
     ].join(":");
+}
+
+
+// 理论种类数:未发现拓展理论时为 5,发现后为 6
+// 用"已发现"标记(theory6StorySeen)而非 unlocked 判断:
+// 理论6 会随研究重置被清空,但玩家一旦发现过,就应始终看到"共有6种"
+function theoryKindCount(){
+    return (typeof game !== "undefined" && game.theory6StorySeen) ? 6 : 5;
 }
 
 
@@ -30,13 +43,17 @@ function aboutKey(){
 // visible: 是否显示
 // paras: 展开后显示的段落
 // stage3Paras: 研究阶段3后追加的段落(可选)
+// 段落可写成字符串(静态)或函数(按当前进度动态求值)
 const ABOUT_SECTIONS = [
     {
         id: "theory",
         title: "理论",
         visible: function(){ return true; },
         paras: [
-            "理论共有5种,在解锁后会产出理论力量,消耗知识升级以生产更多理论力量。知识的生产会乘以各个理论力量的乘积。",
+            function(){
+                return "理论共有" + theoryKindCount() +
+                "种,在解锁后会产出理论力量,消耗知识升级以生产更多理论力量。知识的生产会乘以各个理论力量的乘积。";
+            },
             "当理论的等级达到5后,升级理论的价格增长会加快,即价格膨胀。"
         ]
     },
@@ -73,7 +90,8 @@ const ABOUT_SECTIONS = [
             "花费行动点可以招募助手,提供一些实用的自动化功能。"
         ],
         stage3Paras: [
-            "自动实验助手还可以帮你自动完成实验,在实验达到最优化之前,自动实验助手的效率与你进行此实验的最优操作次数反比。"
+            "自动实验助手还可以帮你自动完成实验,在实验达到最优化之前,自动实验助手的效率与你进行此实验的最优操作次数反比。",
+            "自动实验助手可以升级以提高效率,每次升级效率翻倍。等级达到10后,升级的价格增长会加快,即价格膨胀。"
         ]
     },
     {
@@ -85,10 +103,33 @@ const ABOUT_SECTIONS = [
         ],
         stage3Paras: [
             "你也可以重新开始已完成的实验,实验原来的效果和相应的升级会保留,但会重新生成一个答案。在每个实验中,完成实验所用的最少操作次数,即测量和提交答案次数的总和将被记录并决定自动实验助手的效率,同时实验完成次数也会提供加成。",
-            "当四个实验的最少操作次数分别达到9,15,20,6时,记作已经最优化了相应实验,此时自动实验助手将达到最大效率。"
+            "当四个实验的最少操作次数分别达到9,20,20,6时,记作已经最优化了相应实验,此时自动实验助手将达到最大效率。"
+        ]
+    },
+    {
+        id: "frontier",
+        title: "前沿领域",
+        visible: function(){ return game.researchStage >= 4; },
+        paras: [
+            "你可以随时进入和退出前沿领域,但这样做时将进行一次研究重置。",
+            "在前沿领域中,你无法解锁理论2~5,但你能获得和知识等量的灵感。",
+            "灵感可以用于论文升级,提供各种加成。",
+            "同一行的论文升级只能获取一个。此外,一些升级会额外需要一些条件才能获取,达到需要的条件即可,不消耗相应资源。你也可以重置某一行的升级,这样会同样进行一次研究重置。"
         ]
     }
 ];
+
+
+// 把段落数组渲染为 <p>(段落可为字符串或函数,函数按当前进度动态求值)
+function aboutParasHTML(paras){
+    let html = "";
+    for(let p = 0; p < paras.length; p++){
+        let txt = (typeof paras[p] === "function")
+            ? paras[p]() : paras[p];
+        html += '<p>' + txt + '</p>';
+    }
+    return html;
+}
 
 
 // 生成游戏介绍 HTML(折叠结构,默认收起)
@@ -106,12 +147,9 @@ function buildAboutHTML(){
         '</div>' +
         '<div class="about-sec-body" data-sec="' + s.id + '"' +
         (open ? '' : ' style="display:none"') + '>';
-        for(let p = 0; p < s.paras.length; p++)
-            html += '<p>' + s.paras[p] + '</p>';
-        if(showStage3 && s.stage3Paras){
-            for(let p = 0; p < s.stage3Paras.length; p++)
-                html += '<p>' + s.stage3Paras[p] + '</p>';
-        }
+        html += aboutParasHTML(s.paras);
+        if(showStage3 && s.stage3Paras)
+            html += aboutParasHTML(s.stage3Paras);
         html += '</div></div>';
     }
     return html;

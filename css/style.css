@@ -549,15 +549,133 @@ border-color:#5a9a7a;
 
 }
 
-.paper-head{
+/* 论文升级分行(同行内居中排列)
+   关键:方块组以"整行"为基准居中,而不是减去重置按钮后的剩余空间,
+   这样各行的中间升级才能上下对齐(如"实验导向"与上一行的"引言")。
+   重置按钮用绝对定位贴到行最右端,不参与居中计算。 */
+.paper-row{
+
+position:relative;
+
+display:block;
+
+margin:14px 0;
+
+}
+
+.paper-row-items{
 
 display:flex;
 
-justify-content:space-between;
+align-items:stretch;
+
+justify-content:center;
+
+gap:14px;
+
+flex-wrap:wrap;
+
+}
+
+/* 论文升级方块:固定宽度,内容纵向居中 */
+.paper-row-items .paper-card{
+
+width:220px;
+
+margin:0;
+
+display:flex;
+
+flex-direction:column;
 
 align-items:center;
 
-font-size:15px;
+justify-content:flex-start;
+
+text-align:center;
+
+}
+
+.paper-row-items .paper-desc{
+
+text-align:center;
+
+}
+
+/* 单行只有一个升级时,方块同样居中 */
+.paper-row-items .paper-card:only-child{
+
+width:280px;
+
+}
+
+/* 行重置区(绝对定位到整行右侧,留出 24px 边距不贴边;
+   窄屏时回落为常规流,见文件末尾媒体查询) */
+.paper-row-reset{
+
+position:absolute;
+
+right:24px;
+
+top:50%;
+
+transform:translateY(-50%);
+
+display:flex;
+
+flex-direction:column;
+
+align-items:center;
+
+justify-content:center;
+
+gap:6px;
+
+padding-left:14px;
+
+border-left:1px dashed #2a4a3a;
+
+}
+
+.paper-reset-btn{
+
+padding:8px 16px;
+
+font-size:14px;
+
+border-radius:8px;
+
+border:1px solid #a06030;
+
+background:#3a2214;
+
+color:#f0c090;
+
+cursor:pointer;
+
+}
+
+.paper-reset-btn:hover:not(:disabled){
+
+background:#52301a;
+
+}
+
+.paper-reset-btn:disabled{
+
+opacity:0.45;
+
+cursor:default;
+
+}
+
+.paper-reset-hint{
+
+font-size:12px;
+
+color:#8a9;
+
+line-height:1.5;
 
 }
 
@@ -565,7 +683,71 @@ font-size:15px;
 
 font-weight:bold;
 
+font-size:15px;
+
 color:#cfd;
+
+margin-bottom:4px;
+
+}
+
+.paper-cost{
+
+font-size:13px;
+
+color:#8ab;
+
+margin-top:6px;
+
+}
+
+.paper-req{
+
+font-size:12px;
+
+color:#d09060;
+
+margin-top:4px;
+
+/* 条件有多条时用 \n 换行(见 paperRequireText) */
+white-space:pre-line;
+
+line-height:1.45;
+
+}
+
+.paper-req.met{
+
+color:#7fd0a0;
+
+}
+
+/* 同行已选择其它升级 → 灰掉该方块 */
+.paper-card.row-blocked{
+
+opacity:0.55;
+
+border-color:#3a4a42;
+
+background:#101a16;
+
+}
+
+.paper-row-lock{
+
+font-size:12px;
+
+color:#8a9;
+
+line-height:1.5;
+
+margin-top:6px;
+
+}
+
+.paper-row-lock + .paper-buy{
+
+margin-top:6px;
 
 }
 
@@ -594,6 +776,59 @@ text-align:left;
 font-size:13px;
 
 color:#7fd0a0;
+
+margin-top:6px;
+
+}
+
+.paper-card > .paper-buy{
+
+margin-top:auto;
+
+}
+
+/* 升级提供的加成倍数(已购买时显示;数值实时刷新,不进结构签名) */
+.paper-mult{
+
+font-size:13px;
+
+font-weight:bold;
+
+color:#9fe0c0;
+
+margin-top:6px;
+
+}
+
+/* 第4行有 4 个升级:收窄方块,保证同排一行且居中
+   注:.paper-card 是 content-box(padding 12×2 + border 1×2 = 额外 26px),
+   155+26 = 181px/个 → 4 个 + 3 个间距 = 766px,与第3行所需宽度一致 */
+.paper-row[data-paper-row="4"] .paper-row-items .paper-card{
+
+width:155px;
+
+}
+
+/* 窄屏:重置按钮回落为常规流(居中显示在方块下方),避免与方块重叠 */
+@media (max-width: 900px){
+
+.paper-row-reset{
+
+position:static;
+
+transform:none;
+
+padding-left:0;
+
+border-left:none;
+
+border-top:1px dashed #2a4a3a;
+
+padding-top:10px;
+
+margin-top:12px;
+
+}
 
 }
 
@@ -1632,7 +1867,7 @@ color:#ccc;
 
 .assistant-threshold input{
 
-width:70px;
+width:92px;
 
 padding:4px 6px;
 
@@ -1647,6 +1882,32 @@ border-radius:5px;
 color:white;
 
 font-size:13px;
+
+}
+
+/* 研究总结员:模式切换按钮(阈值 ↔ 倍数;倍数模式需达成成就"项目迭代") */
+.assistant-btn.mode{
+
+background:#2a5a7a;
+
+border-color:#4a92ba;
+
+margin-left:8px;
+
+}
+
+.assistant-btn.mode:hover:enabled{
+
+background:#357095;
+
+}
+
+/* 倍数模式的"目标 AP"(= 上次重置所得 × 倍数) */
+.assistant-target{
+
+color:#9fd8c0;
+
+font-weight:bold;
 
 }
 

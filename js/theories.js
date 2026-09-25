@@ -49,8 +49,63 @@ const theoryData = {
             B: 1,
             N: 5
         }
+    },
+    // 拓展理论:在前沿领域中发现的新理论
+    // 与其他理论不同 —— 它在前沿领域内**依然可用**(理论2~5 在领域内失效)
+    // 未发现前完全不显示(玩家不知道它存在),发现后按前置理论规则解锁
+    theory6:{
+        name:"拓展理论",
+        cost:new Decimal("1e180"),
+        price:{
+            BASE: 1e190,
+            A: 10,
+            B: 1,
+            N: 5
+        }
     }
 };
+
+
+// 拓展理论(理论6)的发现阈值:在前沿领域中知识达到该值后,由剧情发现
+// 注意:与解锁花费(theoryData.theory6.cost)含义不同,分开配置便于单独调整
+const THEORY6_DISCOVER_KNOWLEDGE =
+new Decimal("1e180");
+
+
+// 兼容旧存档:补齐拓展理论的运行时状态与发现标记
+// (旧存档的 game.theories 里没有 theory6,也没有 theory6StorySeen)
+function ensureTheory6Compat(){
+
+    if(!game.theories)
+        game.theories = {};
+
+    if(game.theories.theory6 === undefined){
+
+        game.theories.theory6 = {
+            unlocked:false,
+            level:0,
+            power:new Decimal(1)
+        };
+
+    }
+
+    let t =
+    game.theories.theory6;
+
+    // power 可能是字符串(直接来自存档)或缺失
+    if(!(t.power instanceof Decimal))
+        t.power = new Decimal(t.power === undefined ? 1 : t.power);
+
+    if(t.unlocked === undefined)
+        t.unlocked = false;
+
+    if(t.level === undefined)
+        t.level = 0;
+
+    if(game.theory6StorySeen === undefined)
+        game.theory6StorySeen = false;
+
+}
 
 
 // ============================================================
@@ -114,12 +169,47 @@ function theoryUpgradeCost(id){
 }
 
 
+// 拓展理论(理论6)是否已被发现(前沿领域中知识达标后由剧情发现)
+// 未发现前:该理论完全不显示(玩家不知道它存在)
+function theory6Unlocked(){
+
+    return !!game.theory6StorySeen;
+
+}
+
+
+// 拓展理论的前置理论 id
+//   前沿领域内:理论2~5 不可用,链条变为 1→6,故只需理论1
+//   领域外:沿用正常链条,需要理论5 已解锁
+function theory6PrereqId(){
+
+    return frontierActive() ? "theory1" : "theory5";
+
+}
+
+
+// 拓展理论的前置是否已满足
+function theory6PrereqMet(){
+
+    let pre =
+    game.theories[theory6PrereqId()];
+
+    return !!(pre && pre.unlocked);
+
+}
+
+
 // 判断理论是否应该显示
 function theoryVisible(id){
     let num =
     Number(
         id.replace("theory","")
     );
+
+    // 拓展理论:需先在前沿领域中发现,且前置理论已解锁
+    if(num === 6)
+        return theory6Unlocked()
+            && theory6PrereqMet();
 
     // 前沿领域:理论2~5 被禁用(不显示、无法解锁)
     if(frontierActive() && num >= 2)
@@ -137,14 +227,18 @@ function theoryVisible(id){
 
 
 // 理论在前沿领域中是否被禁用(2~5)
+// 注意:拓展理论(理论6)在前沿领域内**可用** —— 只有 2~5 失效
 function theoryDisabled(id){
 
     if(!frontierActive())
         return false;
 
-    return Number(
+    let num =
+    Number(
         id.replace("theory","")
-    ) >= 2;
+    );
+
+    return num >= 2 && num <= 5;
 
 }
 
@@ -215,7 +309,7 @@ function upgradeTheory(id){
 function buyMaxTheories(){
 
     // 第一步:解锁所有当前可解锁的理论
-    for(let i = 1; i <= 5; i++){
+    for(let i = 1; i <= 6; i++){
 
         let id =
         "theory" + i;
@@ -380,28 +474,96 @@ function knowledgeCapDivisor(){
 }
 
 
-// 计算原始知识速度(各种加成之后、软上限之前)
-// 里程碑 stage1 解锁后:知识获取 ×(1 + 研究重置次数,最大10)
-// 里程碑 stage4(前沿研究):知识获取 ×(1 + 累计行动点)^2
-function knowledgeRawSpeed(){
-    let speed =
+// 已解锁理论的 power 乘积,按两组分别统计(供"参考文献"系列的指数加成使用):
+//   theoryProductLegacy() → 理论1~5 的乘积
+//   theoryProduct6()      → 理论6 的乘积(未解锁视为 1)
+function theoryProductLegacy(){
+
+    let prod =
     new Decimal(1);
 
     for(let id in game.theories){
 
+        if(id === "theory6")
+            continue;
+
         let t =
         game.theories[id];
 
-        if(t.unlocked){
-
-            speed =
-            speed.mul(
-                t.power
-            );
-
-        }
+        if(t.unlocked)
+            prod = prod.mul(t.power);
 
     }
+
+    return prod;
+
+}
+
+
+function theoryProduct6(){
+
+    let prod =
+    new Decimal(1);
+
+    for(let id in game.theories){
+
+        if(id !== "theory6")
+            continue;
+
+        let t =
+        game.theories[id];
+
+        if(t.unlocked)
+            prod = prod.mul(t.power);
+
+    }
+
+    return prod;
+
+}
+
+
+// 所有理论对知识的加成(两组乘积各自按论文指数取幂后相乘)
+// 论文"参考文献-引用旧理论"(第6行):理论1~5 的项 ^1.1
+// 论文"参考文献-引用理论6"(第6行):理论6 的项 ^1.3
+// (指数入口在 frontier.js;未加载时按 1 处理,保证独立测试可用)
+function theoryPowerProduct(){
+
+    let legacy =
+    theoryProductLegacy();
+
+    let t6 =
+    theoryProduct6();
+
+    let expLegacy =
+    (typeof refLegacyTheoryExponent === "function")
+    ? refLegacyTheoryExponent()
+    : 1;
+
+    let expT6 =
+    (typeof refTheory6Exponent === "function")
+    ? refTheory6Exponent()
+    : 1;
+
+    if(expLegacy !== 1)
+        legacy = legacy.pow(expLegacy);
+
+    if(expT6 !== 1)
+        t6 = t6.pow(expT6);
+
+    return legacy.mul(t6);
+
+}
+
+
+// 计算原始知识速度(各种加成之后、软上限之前)
+// 里程碑 stage1 解锁后:知识获取 ×(1 + 研究重置次数,最大10)
+// 里程碑 stage4(前沿研究):知识获取 ×(1 + 累计行动点)
+function knowledgeRawSpeed(){
+
+    // 理论对知识的加成(= 各已解锁理论 power 的乘积,可被"参考文献"提高指数)
+    let speed =
+    theoryPowerProduct();
 
     // 研究里程碑 stage1:知识获取加成
     if(isMilestoneActive("stage1")){
@@ -411,13 +573,19 @@ function knowledgeRawSpeed(){
         );
     }
 
-    // 研究里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    // 研究里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)
     if(isMilestoneActive("stage4")){
         speed =
         speed.mul(
             frontierResearchBonus()
         );
     }
+
+    // 论文升级"注重创新":知识获取 ×(1+灵感)^(1/4)
+    speed =
+    speed.mul(
+        innovationBonus()
+    );
 
     return speed;
 }
@@ -636,7 +804,7 @@ function renderTheories(){
 
 // ============================================================
 // 键盘操作(在游戏界面的任意页面都可用)
-//   数字键 1~5:购买对应理论(未解锁则解锁,已解锁则升级一次)
+//   数字键 1~6:购买对应理论(未解锁则解锁,已解锁则升级一次)
 //   M 键:购买全部最大;按住 M 持续生效
 //         (仅在"购买最大"解锁后有效,见 buyMaxUnlocked)
 // ============================================================
@@ -656,10 +824,10 @@ function keyboardActive(){
 }
 
 
-// 按键购买对应理论(数字 1~5 → theory1~5)
+// 按键购买对应理论(数字 1~6 → theory1~6)
 function buyTheoryByKey(num){
 
-    if(num < 1 || num > 5)
+    if(num < 1 || num > 6)
         return;
 
     let id =
@@ -714,8 +882,8 @@ function stopHoldBuyMax(){
         if(tag === "input" || tag === "textarea")
             return;
 
-        // 数字键 1~5 → 购买对应理论
-        if(e.key >= "1" && e.key <= "5"){
+        // 数字键 1~6 → 购买对应理论
+        if(e.key >= "1" && e.key <= "6"){
 
             e.preventDefault();
 

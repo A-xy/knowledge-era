@@ -24,10 +24,19 @@ function statsKey(){
     return [
         unlocked,
         isMilestoneActive("stage1") ? 1 : 0,
+        isMilestoneActive("stage2") ? 1 : 0,   // 跨学科研究:行动点获取新增一行
         isMilestoneActive("stage4") ? 1 : 0,   // 前沿研究:知识产出新增一行
+        isMilestoneActive("stage9") ? 1 : 0,   // 无尽阶梯:助手速率新增一行
         summaryUnlocked() ? 1 : 0,             // 摘要:知识边界倍率行
+        introEffectsEnabled() ? 1 : 0,         // 引言:效果5(助手速率)/效果6(行动点)/效果7(知识边界)
+        paperOwned("innovation") ? 1 : 0,      // 注重创新:知识产出新增一行
+        paperOwned("experimentOriented") ? 1 : 0, // 实验导向:助手速率新增一行
+        paperOwned("refLegacyTheory") ? 1 : 0,    // 引用旧理论:知识产出新增一行
+        paperOwned("refTheory6") ? 1 : 0,         // 引用理论6:知识产出新增一行
+        paperOwned("refExperiment") ? 1 : 0,      // 引用实验成果:行动点获取新增一行
         isEffectUnlocked("metaGain") ? 1 : 0,
-        game.ideas >= 4 ? 1 : 0   // 升级倍率效果影响理论力量分解
+        game.ideas >= 4 ? 1 : 0,  // 升级倍率效果影响理论力量分解
+        (game.theories.theory6 && game.theories.theory6.unlocked) ? 1 : 0  // 拓展理论:新增一行
     ].join(":");
 
 }
@@ -91,10 +100,11 @@ function buildStatsHTML(){
         '<div class="stat-line">研究加成(阶段1):×<span class="stat-val" data-key="resKnow"></span></div>';
     }
 
-    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)
+    // (公式细节不在此展示,面板只显示结果值)
     if(isMilestoneActive("stage4")){
         html +=
-        '<div class="stat-line">研究加成(阶段4·前沿研究):×<span class="stat-val" data-key="resKnow4"></span>(= (1+累计行动点)^2)</div>';
+        '<div class="stat-line">研究加成(阶段4·前沿研究):×<span class="stat-val" data-key="resKnow4"></span></div>';
     }
 
     // 知识边界(软上限):显示知识生产被除以的倍数(= 原始速度 / 受限后速度)
@@ -103,8 +113,34 @@ function buildStatsHTML(){
 
     // 论文升级"摘要":知识边界倍率与当前边界值(未购买时 ×1 / 基础值)
     html +=
-    '<div class="stat-line">知识边界倍率(摘要):×<span class="stat-val" data-key="summaryMult"></span></div>' +
+    '<div class="stat-line">知识边界倍率(摘要):×<span class="stat-val" data-key="summaryMult"></span></div>';
+
+    // 元-力量效果7(引言):知识边界 ×sqrt(1+MetaPower)
+    if(introEffectsEnabled()){
+        html +=
+        '<div class="stat-line">元-力量效果7(知识边界):×<span class="stat-val" data-key="metaEff7"></span></div>';
+    }
+
+    html +=
     '<div class="stat-line">当前知识边界:<span class="stat-val" data-key="limitVal"></span>/s</div>';
+
+    // 论文升级"注重创新":灵感提升知识获取(未购买时 ×1)
+    if(paperOwned("innovation")){
+        html +=
+        '<div class="stat-line">论文·注重创新:×<span class="stat-val" data-key="innovBonus"></span></div>';
+    }
+
+    // 论文"参考文献"系列(第6行):提高理论乘积的指数
+    // 只显示"相对于原指数"的额外倍率(原指数为 1,故 = 乘积^0.1 / 乘积^0.3)
+    if(paperOwned("refLegacyTheory")){
+        html +=
+        '<div class="stat-line">论文·引用旧理论(理论1~5^1.1):×<span class="stat-val" data-key="refLegacyMult"></span></div>';
+    }
+
+    if(paperOwned("refTheory6")){
+        html +=
+        '<div class="stat-line">论文·引用理论6(理论6^1.3):×<span class="stat-val" data-key="refT6Mult"></span></div>';
+    }
 
     html += '</details>';
 
@@ -187,15 +223,65 @@ function buildStatsHTML(){
     '<div class="stat-line">理论1价格膨胀起始等级 N:<span class="stat-val" data-key="tUpN"></span>(基础 ' + t1N + ' + 实验4效果 <span class="stat-val" data-key="exp4EffectVal"></span>)</div>' +
     '</details>';
 
-    // ---------- 实验完成次数生产速率(自动实验助手,研究阶段3) ----------
+    // ---------- 行动点获取 ----------
+    // 基础值只由知识决定;再乘里程碑 stage2 与元-力量效果6
+    html +=
+    '<details class="stat-group">' +
+    '<summary>行动点获取:<span class="stat-val" data-key="apGain"></span>/次</summary>' +
+    '<div class="stat-line">基础值:<span class="stat-val" data-key="apBase"></span>(由知识计算)</div>';
+
+    // 元-力量效果6(引言):行动点获取 ×(1+MetaPower)^0.1
+    if(introEffectsEnabled()){
+        html +=
+        '<div class="stat-line">元-力量效果6:×<span class="stat-val" data-key="metaEff6"></span></div>';
+    }
+
+    // 研究里程碑 stage2(跨学科研究):行动点获取 ×2^(研究阶段-1)
+    if(isMilestoneActive("stage2")){
+        html +=
+        '<div class="stat-line">研究阶段2里程碑:×<span class="stat-val" data-key="apStage2"></span>' +
+        '(研究阶段 <span class="stat-val" data-key="apStageNum"></span>)</div>';
+    }
+
+    // 论文"参考文献-引用实验成果":公式指数 0.05 → 0.06
+    if(paperOwned("refExperiment")){
+        html +=
+        '<div class="stat-line">获取公式指数:<span class="stat-val" data-key="apExp"></span>' +
+        '(基础 <span class="stat-val" data-key="apExpBase"></span> + 论文·引用实验成果)</div>';
+    }
+
+    html += '</details>';
+
+    // 实验完成次数生产速率(自动实验助手)
     html +=
     '<details class="stat-group">' +
     '<summary>实验完成次数生产速率</summary>' +
     '<div class="stat-line">实验1:<span class="stat-val" data-key="expAutoRate1"></span>/s</div>' +
     '<div class="stat-line">实验2:<span class="stat-val" data-key="expAutoRate2"></span>/s</div>' +
     '<div class="stat-line">实验3:<span class="stat-val" data-key="expAutoRate3"></span>/s</div>' +
-    '<div class="stat-line">实验4:<span class="stat-val" data-key="expAutoRate4"></span>/s</div>' +
-    '</details>';
+    '<div class="stat-line">实验4:<span class="stat-val" data-key="expAutoRate4"></span>/s</div>';
+
+    // 元-力量效果5(引言):实验助手速度 ×(1+MetaPower)^0.05
+    if(introEffectsEnabled()){
+        html +=
+        '<div class="stat-line">元-力量效果5:×<span class="stat-val" data-key="metaEff5"></span></div>';
+    }
+
+    // 论文升级"实验导向":实验助手速度 ×(1+实验完成次数总和)^0.2
+    if(paperOwned("experimentOriented")){
+        html +=
+        '<div class="stat-line">论文·实验导向:×<span class="stat-val" data-key="expOrBonus"></span>' +
+        '(完成次数总和 <span class="stat-val" data-key="expTotal"></span>)</div>';
+    }
+
+    // 研究里程碑"无尽阶梯"(阶段9):实验助手速度 ×(1+研究重置次数/30)
+    if(isMilestoneActive("stage9")){
+        html +=
+        '<div class="stat-line">里程碑·无尽阶梯:×<span class="stat-val" data-key="endlessStair"></span>' +
+        '(研究重置 <span class="stat-val" data-key="endlessResets"></span> 次)</div>';
+    }
+
+    html += '</details>';
 
     return html;
 
@@ -223,7 +309,7 @@ function updateStatVals(){
     if(isMilestoneActive("stage1"))
         setStat("resKnow", researchPowerBonus());
 
-    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)^2
+    // 里程碑 stage4(前沿研究):知识获取 ×(1+累计行动点)
     if(isMilestoneActive("stage4"))
         setStat("resKnow4", frontierResearchBonus());
 
@@ -233,6 +319,33 @@ function updateStatVals(){
     // 论文升级"摘要":知识边界倍率与当前知识边界值
     setStat("summaryMult", summaryBoundaryBonus());
     setStat("limitVal", knowledgeLimit());
+
+    // 论文升级"注重创新":知识获取倍率
+    if(paperOwned("innovation"))
+        setStat("innovBonus", innovationBonus());
+
+    // 论文"参考文献-引用旧理论":理论1~5^1.1 带来的额外倍率(= 乘积^0.1)
+    if(paperOwned("refLegacyTheory"))
+        setStat("refLegacyMult", theoryProductLegacy().pow(0.1));
+
+    // 论文"参考文献-引用理论6":理论6^1.3 带来的额外倍率(= 理论6^0.3)
+    if(paperOwned("refTheory6"))
+        setStat("refT6Mult", theoryProduct6().pow(0.3));
+
+    // 论文"参考文献-引用实验成果":行动点公式指数
+    if(paperOwned("refExperiment")){
+        setStat("apExp", researchActionExp());
+        setStat("apExpBase", RESEARCH_CONFIG.actionExp);
+    }
+
+    // 行动点获取:最终值 / 基础值 / 里程碑 stage2 倍率
+    setStat("apGain", actionPointsGain());
+    setStat("apBase", actionPointsBase());
+
+    if(isMilestoneActive("stage2")){
+        setStat("apStage2", actionPointsStageMultiplier());
+        setStat("apStageNum", game.researchStage);
+    }
 
     // 理论力量
     for(let id in game.theories){
@@ -282,6 +395,14 @@ function updateStatVals(){
     if(isEffectUnlocked("metaGain"))
         setStat("mpgain", metaGainBonus());
 
+    // 元-力量效果5~7(引言;未达对应想法数时倍率为 1)
+    // 效果5 → 实验完成次数生产速率组;效果6 → 行动点获取组;效果7 → 知识产出组
+    if(introEffectsEnabled()){
+        setStat("metaEff5", metaExpAssistantBonus());
+        setStat("metaEff6", metaAPBonus());
+        setStat("metaEff7", metaBoundaryBonus());
+    }
+
     // 想法价格
     setStat("ideaCostVal", ideaCost());
     setStat("ideaN", IDEA_PRICE.N + exp3Effect());
@@ -307,6 +428,18 @@ function updateStatVals(){
     setStat("expAutoRate2", expAutoRate("expAuto2"));
     setStat("expAutoRate3", expAutoRate("expAuto3"));
     setStat("expAutoRate4", expAutoRate("expAuto4"));
+
+    // 论文升级"实验导向"
+    if(paperOwned("experimentOriented")){
+        setStat("expTotal", totalExpCompletions());
+        setStat("expOrBonus", experimentOrientedBonus());
+    }
+
+    // 研究里程碑"无尽阶梯"(阶段9)
+    if(isMilestoneActive("stage9")){
+        setStat("endlessStair", endlessStaircaseBonus());
+        setStat("endlessResets", endlessStaircaseResets());
+    }
 
 }
 
@@ -460,7 +593,7 @@ function renderGameStats(){
     }
 
     if(showStage3){
-        set(".gs-expall", totalExpCompletions());
+        set(".gs-expall", format(totalExpCompletions()));
     }
 
 }

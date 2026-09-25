@@ -19,6 +19,7 @@
 //   cap8h     时间碎片储量上限 → 8 小时
 //   cap12h    时间碎片储量上限 → 12 小时
 //   buyMax    全部最大按钮永久解锁(不被想法重置影响)
+//   summarizerMode 解锁研究总结员的"倍数模式"(阈值 ↔ 倍数可切换)
 //   record    纯记录型(解锁内容由已有机制自动提供,仅登记)
 // check: 达成条件函数
 // 说明:格子上点击可选中,选中的成就会在上方详情面板中显示条件/奖励/状态。
@@ -187,8 +188,8 @@ const ACHIEVEMENT_LIST = [
         id: "research10",
         name: "项目迭代",
         condDesc: "进行 10 次研究重置",
-        rewardDesc: "120 时间碎片",
-        shards: 120,
+        rewardDesc: "解锁研究总结员的新工作模式",
+        unlock: "summarizerMode",
         check: function(){ return game.researchResets >= 10; }
     },
     // ---- 第五行 ----
@@ -265,8 +266,100 @@ const ACHIEVEMENT_LIST = [
         rewardDesc: "解锁前沿领域",
         unlock: "record",
         check: function(){ return game.researchStage >= 4; }
+    },
+    {
+        id: "exploreFrontier",
+        name: "探索前沿",
+        condDesc: "进入前沿领域",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return !!game.frontierActive; }
+    },
+    {
+        id: "stage5",
+        name: "没有新内容吗",
+        condDesc: "达到研究阶段 5",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return game.researchStage >= 5; }
+    },
+    {
+        id: "idea35",
+        name: "更多加成II",
+        condDesc: "拥有 35 想法",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return game.ideas >= 35; }
+    },
+    {
+        id: "keyBreakthrough",
+        name: "关键突破",
+        condDesc: "在前沿领域中达到 1e180 知识",
+        rewardDesc: "解锁新的理论",
+        unlock: "record",
+        check: function(){
+            return !!game.frontierActive
+                && game.knowledge.gte(THEORY6_DISCOVER_KNOWLEDGE);
+        }
+    },
+    // ---- 第七行 ----
+    {
+        id: "anotherInfinity",
+        name: "另一种无限",
+        condDesc: "达到 1.79e308 灵感",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return frontierInspiration().gte(KNOWLEDGE_LIMIT); }
+    },
+    {
+        // 完成次数由自动实验助手累加;本成就要求"手动"完成一次
+        // 标记由 experiment.js 的 expOnComplete() 置位
+        id: "whatsThePoint",
+        name: "意义何在",
+        condDesc: "在某个实验的完成次数达到 1e10 后,手动完成一次该实验",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return !!game.manualExpAfterE10; }
+    },
+    {
+        id: "endlessStairs",
+        name: "无尽阶梯",
+        condDesc: "达到研究阶段 9",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return game.researchStage >= 9; }
+    },
+    {
+        id: "stage10",
+        name: "永无止境",
+        condDesc: "达到研究阶段 10",
+        rewardDesc: "180 时间碎片",
+        shards: 180,
+        check: function(){ return game.researchStage >= 10; }
+    },
+    {
+        // 奖励"解锁新的层级"对应的层级系统尚未实装,先登记为 record
+        id: "paperConclusion",
+        name: "发paper啦",
+        condDesc: "完成论文升级「结论」",
+        rewardDesc: "解锁新的层级",
+        unlock: "record",
+        check: function(){ return paperOwned("conclusion"); }
     }
 ];
+
+
+// ============================================================
+// 旧存档兼容:补齐成就相关的顶层字段
+// (读档/导入存档时各调用一次,见 save.js)
+// ============================================================
+function ensureAchievementCompat(){
+
+    // 成就"意义何在":某实验完成次数达 1e10 后手动完成过一次
+    if(game.manualExpAfterE10 === undefined)
+        game.manualExpAfterE10 = false;
+
+}
 
 
 // 成就是否已达成(含检查通过但未登记的运行时查询)

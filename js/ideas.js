@@ -14,6 +14,8 @@
 //   效果2(需 4 想法):升级倍率从 2 提升为 2 + 0.2*ln(MetaPower+1)
 //   效果3(需 7 想法):元-力量获取速度 ×(1 + metaPower)^(1/4)
 //   效果4(需 10 想法):想法花费 ÷(1 + metaPower)
+//   效果5~7(需论文"引言";29/32/35 想法):实验助手速度 / 行动点获取 / 知识边界
+//     —— 未解锁引言时既不生效,也不显示
 // ============================================================
 
 
@@ -33,7 +35,8 @@ const IDEA_PRICE = {
 // key: 效果唯一标识(供代码判断是否解锁)
 // unlockIdeas: 需要达到的想法数
 // name: 效果名称
-// desc: 效果说明
+// desc: 效果说明(兜底文本;界面显示时优先用 metaEffectDesc 的"结果值")
+// requiresIntro: 需要论文"引言"(前沿领域)解锁后才生效与显示(可选)
 const META_EFFECTS = [
     {
         key: "powerBonus",
@@ -58,11 +61,46 @@ const META_EFFECTS = [
         unlockIdeas: 10,
         name: "想法花费减免",
         desc: "下个想法花费 ÷(1 + MetaPower)"
+    },
+    {
+        key: "introExpAssistant",
+        unlockIdeas: 29,
+        requiresIntro: true,
+        name: "实验助手加成",
+        desc: "所有实验助手的速度 ×(1 + MetaPower)^0.05"
+    },
+    {
+        key: "introAP",
+        unlockIdeas: 32,
+        requiresIntro: true,
+        name: "行动点加成",
+        desc: "行动点获取量 ×(1 + MetaPower)^0.1"
+    },
+    {
+        key: "introBoundary",
+        unlockIdeas: 35,
+        requiresIntro: true,
+        name: "知识边界提升",
+        desc: "知识边界 ×sqrt(1 + MetaPower)"
     }
 ];
 
 
-// 判断某个效果是否已解锁(按 key 查配置,解锁点由 META_EFFECTS 统一控制)
+// 效果的前提是否已满足(requiresIntro 的效果需要论文"引言")
+// 未解锁引言时:效果既不生效,也不在界面显示
+function metaEffectAvailable(effect){
+
+    if(!effect.requiresIntro)
+        return true;
+
+    // 引言定义在 frontier.js(运行时已加载);此处做存在性判断以便离线测试
+    return typeof introUnlocked === "function"
+    && introUnlocked();
+
+}
+
+
+// 判断某个效果是否已解锁(按 key 查配置;解锁点与前提统一由 META_EFFECTS 控制)
 function isEffectUnlocked(key){
 
     for(let i = 0; i < META_EFFECTS.length; i++){
@@ -70,11 +108,57 @@ function isEffectUnlocked(key){
         let e = META_EFFECTS[i];
 
         if(e.key === key)
-            return game.ideas >= e.unlockIdeas;
+            return metaEffectAvailable(e)
+            && game.ideas >= e.unlockIdeas;
 
     }
 
     return false;
+
+}
+
+
+// ============================================================
+// 论文"引言"解锁的元-力量效果公式(界面只显示结果,不展示公式)
+// ============================================================
+
+// 效果5:所有实验助手的速度 ×(1+MetaPower)^0.05
+function metaExpAssistantBonus(){
+
+    if(!isEffectUnlocked("introExpAssistant"))
+        return new Decimal(1);
+
+    return Decimal.pow(
+        new Decimal(1).add(game.metaPower),
+        0.05
+    );
+
+}
+
+
+// 效果6:行动点获取量 ×(1+MetaPower)^0.1
+function metaAPBonus(){
+
+    if(!isEffectUnlocked("introAP"))
+        return new Decimal(1);
+
+    return Decimal.pow(
+        new Decimal(1).add(game.metaPower),
+        0.1
+    );
+
+}
+
+
+// 效果7:知识边界 ×sqrt(1+MetaPower)
+function metaBoundaryBonus(){
+
+    if(!isEffectUnlocked("introBoundary"))
+        return new Decimal(1);
+
+    return new Decimal(1)
+    .add(game.metaPower)
+    .sqrt();
 
 }
 
@@ -94,17 +178,46 @@ function metaPowerBonus(){
 }
 
 
-// 效果2 的升级倍率:2 + 0.2 * ln(MetaPower + 1)
+// 效果2 的升级倍率
+//   基础(效果2 解锁后) = 2 + 0.2 * ln(MetaPower + 1)
+//   论文升级"关联旧理论"另提供 2 + 0.02 * ln(MetaPower + 1)^2,两者取较大值
+//   (都未解锁时由调用方兜底为 2)
 function metaUpgradeRate(){
+    return Decimal.max(
+        new Decimal(2)
+        .add(
+            new Decimal(0.2)
+            .mul(
+                game.metaPower
+                .add(1)
+                .ln()
+            )
+        ),
+        legacyTheoryUpgradeRate()
+    );
+}
+
+
+// 论文升级"关联旧理论"提供的升级倍率:2 + 0.02 * ln(MetaPower+1)^2
+// 未购买时返回 0(因此不会成为 max 的结果)
+function legacyTheoryUpgradeRate(){
+
+    if(typeof paperOwned !== "function"
+        || !paperOwned("legacyTheory"))
+        return new Decimal(0);
+
+    let ln =
+    game.metaPower
+    .add(1)
+    .ln();
+
     return new Decimal(2)
     .add(
-        new Decimal(0.2)
-        .mul(
-            game.metaPower
-            .add(1)
-            .ln()
-        )
+        new Decimal(0.02)
+        .mul(ln)
+        .mul(ln)
     );
+
 }
 
 
@@ -120,6 +233,13 @@ function metaGainBonus(){
 
 
 // 当前生效的元-力量效果描述(带数值)
+// 论文"引言"解锁的效果当前是否可见/计入(未买引言则为 false)
+// 效果列表与数值统计都用它作为显示开关
+function introEffectsEnabled(){
+    return metaEffectAvailable({ requiresIntro: true });
+}
+
+
 function metaEffectDesc(effect){
 
     if(effect.key === "powerBonus"){
@@ -142,13 +262,29 @@ function metaEffectDesc(effect){
         format(new Decimal(1).add(game.metaPower));
     }
 
+    // 论文"引言"解锁的效果5~7(与其它效果一致:只显示结果,不显示公式)
+    if(effect.key === "introExpAssistant"){
+        return "所有实验助手的速度 ×" +
+        format(metaExpAssistantBonus());
+    }
+
+    if(effect.key === "introAP"){
+        return "行动点获取量 ×" +
+        format(metaAPBonus());
+    }
+
+    if(effect.key === "introBoundary"){
+        return "知识边界 ×" +
+        format(metaBoundaryBonus());
+    }
+
     return effect.desc;
 
 }
 
 
-// 绘制元-力量效果列表(增量渲染:仅在想法数变化时重建)
-let lastEffectIdeas = -1;
+// 绘制元-力量效果列表(增量渲染:仅在想法数 / 引言解锁状态变化时重建)
+let lastEffectKey = "";
 
 function renderMetaEffects(){
 
@@ -160,8 +296,12 @@ function renderMetaEffects(){
     if(!box)
         return;
 
-    // 想法数没变 → 不重建,只更新数值文本
-    if(lastEffectIdeas === game.ideas){
+    // 签名 = 想法数 + 引言是否解锁(引言解锁会新增可见的效果条目)
+    let key =
+    game.ideas + ":" + (introEffectsEnabled() ? 1 : 0);
+
+    // 没有变化 → 不重建,只更新数值文本
+    if(lastEffectKey === key){
 
         let vals =
         box.querySelectorAll(".effect-val");
@@ -184,7 +324,7 @@ function renderMetaEffects(){
 
     }
 
-    lastEffectIdeas = game.ideas;
+    lastEffectKey = key;
 
     box.innerHTML = "";
 
@@ -193,6 +333,10 @@ function renderMetaEffects(){
     for(let i = 0; i < META_EFFECTS.length; i++){
 
         let e = META_EFFECTS[i];
+
+        // 前提未满足(尚未解锁引言)→ 完全不显示,也不作为"下一个效果"的提示
+        if(!metaEffectAvailable(e))
+            continue;
 
         let div =
         document.createElement("div");
@@ -224,7 +368,10 @@ function renderMetaEffects(){
                 div.innerHTML =
                 "<span class=\"effect-lock\">达到 " +
                 e.unlockIdeas +
-                " 想法以解锁下一个效果</span>";
+                (e.requiresIntro
+                    ? " 想法解锁新效果"
+                    : " 想法以解锁下一个效果") +
+                "</span>";
 
                 box.appendChild(div);
 

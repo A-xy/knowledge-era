@@ -548,10 +548,11 @@ if(isAssistantEnabled("ideaSorter") && canGetIdea()){
     getIdea();
 }
 
-// 助手:研究总结员——可进行研究重置且可获得阈值AP时自动重置
+// 助手:研究总结员——可进行研究重置且满足触发条件时自动重置
+// (阈值模式:可获得 ≥ 阈值;倍数模式:可获得 ≥ 上次重置所得 × 倍数)
 if(isAssistantEnabled("researchSummarizer")
     && canResearchReset()
-    && actionPointsGain().gte(game.assistants.researchSummarizer.threshold)){
+    && summarizerShouldReset()){
     researchReset();
 }
 
@@ -669,6 +670,22 @@ if(game.researchStage >= 4
     saveGame();
 
     showStage4FrontierStory();
+
+    return;
+
+}
+
+// 前沿领域中知识达到 1e180:发现拓展理论(理论6)
+// 该标记永久保留(不随研究重置清空),此后理论6 按前置理论规则解锁
+if(!game.theory6StorySeen
+    && frontierActive()
+    && game.knowledge.gte(THEORY6_DISCOVER_KNOWLEDGE)){
+
+    game.theory6StorySeen = true;
+
+    saveGame();
+
+    showTheory6Story();
 
     return;
 

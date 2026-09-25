@@ -159,6 +159,9 @@ async function importSave(){
 
         }
 
+        // 兼容旧存档:拓展理论(理论6)与发现标记
+        ensureTheory6Compat();
+
         if(game.ideas === undefined)
             game.ideas = 0;
 
@@ -222,19 +225,12 @@ async function importSave(){
             game.stage4FrontierStorySeen = false;
 
         // 兼容旧存档:前沿领域(阶段4)
-        // frontierActive:是否处于前沿领域;inspiration:灵感;
-        // summaryUnlocked / introUnlocked:论文"摘要"/"引言"
-        if(game.frontierActive === undefined)
-            game.frontierActive = false;
-        if(game.inspiration === undefined)
-            game.inspiration = new Decimal(0);
-        else
-            game.inspiration =
-            new Decimal(game.inspiration);
-        if(game.summaryUnlocked === undefined)
-            game.summaryUnlocked = false;
-        if(game.introUnlocked === undefined)
-            game.introUnlocked = false;
+        // frontierActive / inspiration / 各论文升级解锁状态均由
+        // frontier.js 的 ensurePaperCompat() 按 FRONTIER_CONFIG 自动补齐
+        ensurePaperCompat();
+
+        // 兼容旧存档:成就相关字段(ensureAchievementCompat,见 achievements.js)
+        ensureAchievementCompat();
 
         // 兼容旧存档:研究系统字段
         if(game.researchStage === undefined)
@@ -267,7 +263,7 @@ async function importSave(){
             let defaults = {
                 theorist: { unlocked: false, enabled: true },
                 ideaSorter: { unlocked: false, enabled: true },
-                researchSummarizer: { unlocked: false, enabled: true, threshold: 5 },
+                researchSummarizer: { unlocked: false, enabled: true },
                 expAuto1: { unlocked: false, enabled: true, level: 0 },
                 expAuto2: { unlocked: false, enabled: true, level: 0 },
                 expAuto3: { unlocked: false, enabled: true, level: 0 },
@@ -286,10 +282,7 @@ async function importSave(){
                     if(game.assistants[key].enabled === undefined)
                         game.assistants[key].enabled = true;
 
-                    if(key === "researchSummarizer"
-                        && game.assistants[key].threshold === undefined)
-                        game.assistants[key].threshold = 5;
-
+                    // 研究总结员的阈值/倍数/模式:由 ensureSummarizerCompat() 统一补齐
                     if(key.indexOf("expAuto") === 0
                         && game.assistants[key].level === undefined)
                         game.assistants[key].level = 0;
@@ -299,6 +292,9 @@ async function importSave(){
             }
 
         }
+
+        // 兼容旧存档:研究总结员(模式/倍数设置 + 上次重置行动点)
+        ensureSummarizerCompat();
 
         // 兼容旧存档:实验系统(首次进入实验页时生成 exp1)
         if(game.experiments === undefined)
@@ -376,6 +372,9 @@ function loadGame(){
 
     }
 
+    // 兼容旧存档:拓展理论(理论6)与发现标记
+    ensureTheory6Compat();
+
     // 兼容旧存档:想法系统字段
     if(game.ideas === undefined)
         game.ideas = 0;
@@ -439,18 +438,12 @@ function loadGame(){
     if(game.stage4FrontierStorySeen === undefined)
         game.stage4FrontierStorySeen = false;
 
-    // 前沿领域(阶段4)
-    if(game.frontierActive === undefined)
-        game.frontierActive = false;
-    if(game.inspiration === undefined)
-        game.inspiration = new Decimal(0);
-    else
-        game.inspiration =
-        new Decimal(game.inspiration);
-    if(game.summaryUnlocked === undefined)
-        game.summaryUnlocked = false;
-    if(game.introUnlocked === undefined)
-        game.introUnlocked = false;
+    // 前沿领域(阶段4):frontierActive / inspiration / 各论文升级解锁状态
+    // 统一由 frontier.js 的 ensurePaperCompat() 按配置补齐
+    ensurePaperCompat();
+
+    // 成就相关字段(ensureAchievementCompat,见 achievements.js)
+    ensureAchievementCompat();
 
     // 兼容旧存档:研究系统字段
     if(game.researchStage === undefined)
@@ -483,7 +476,7 @@ function loadGame(){
         let defaults = {
             theorist: { unlocked: false, enabled: true },
             ideaSorter: { unlocked: false, enabled: true },
-            researchSummarizer: { unlocked: false, enabled: true, threshold: 5 },
+            researchSummarizer: { unlocked: false, enabled: true },
             expAuto1: { unlocked: false, enabled: true, level: 0 },
             expAuto2: { unlocked: false, enabled: true, level: 0 },
             expAuto3: { unlocked: false, enabled: true, level: 0 },
@@ -515,6 +508,9 @@ function loadGame(){
         }
 
     }
+
+    // 兼容旧存档:研究总结员(模式/倍数设置 + 上次重置行动点)
+    ensureSummarizerCompat();
 
     // 兼容旧存档:实验系统(首次进入实验页时生成 exp1)
     if(game.experiments === undefined)
