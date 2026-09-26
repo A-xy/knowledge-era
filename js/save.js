@@ -139,6 +139,14 @@ async function importSave(){
 
         game = obj;
 
+        // 主循环计时基准:与 loadGame 同理,从导入的存档恢复计时起点
+        if(typeof lastTickTime !== "undefined"){
+            lastTickTime =
+            (game.lastSave && game.lastSave > 0)
+                ? game.lastSave
+                : null;
+        }
+
         game.knowledge =
         new Decimal(
             game.knowledge
@@ -355,6 +363,17 @@ function loadGame(){
 
 
     game=obj;
+
+
+    // 主循环计时基准:从存档恢复"上次真正结算的时间",
+    // 这样后台挂机/关页面期间的全部时长都会进离线碎片转化。
+    // (取不到时保持 null,交给首帧自行初始化)
+    if(typeof lastTickTime !== "undefined"){
+        lastTickTime =
+        (game.lastSave && game.lastSave > 0)
+            ? game.lastSave
+            : null;
+    }
 
 
     game.knowledge=

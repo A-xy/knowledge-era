@@ -71,7 +71,7 @@ function setTimeMult(mult){
 }
 
 
-// 每真实 tick 消耗碎片(调用方传真实时间步长 BASE_DT)
+// 每真实 tick 消耗碎片(调用方传真实时间步长)
 // 消耗 = (倍数-1) × 真实秒;碎片不足 → 自动回 ×1
 // 返回当前实际生效倍数(可能已被降回 1)
 function consumeTimeShards(realDt){
@@ -96,12 +96,73 @@ function timeShards(){
 }
 
 
-// 离线转化:把离线时长转为时间碎片(上限 = 储量上限)
+// 单帧最大真实步长(秒):标签页被浏览器节流/挂起后回到前台时,
+// 把积压时间切成这样的小步依次结算(不会一步吃掉几十秒)
+//
+// 为什么必须切小步:速率和状态互相喂养(元-力量越高增速越快),
+// 一步算完等于把增速固定在起点 → 系统性低估
+// (实测:300 秒一步算出来的元-力量比逐步算少 44%)。
+const MAX_FRAME_DT = 1;
+
+// 每次 update 最多花多少毫秒做补帧(时间预算,不是步数上限)。
+// 挂机很久后积压可能上千秒,一次补完会把主线程卡住好几秒;
+// 按耗时设限就能"这帧先补一部分,剩下的留到下一帧",
+// 页面保持流畅,时间也一秒不丢。
+const CATCHUP_BUDGET_MS = 12;
+
+// 兜底:单次 update 最多补多少步(防极端情况死循环;
+// 正常情况由时间预算先触发)
+const MAX_CATCHUP_TICKS = 100000;
+
+
+// ============================================================
+// 时间记账:整个游戏的时间推进只认一个基准 —— lastTickTime(毫秒)
+//   · 每结算掉 t 秒,lastTickTime += t(未结算的时间自然积压成"额度")
+//   · 额度 = now - lastTickTime,由主循环补帧与离线碎片转化共用
+//   · 谁先来谁用,用完即扣,所以两边不会重复计算、也不会留下黑洞
+// ============================================================
+
+// 上次真正结算游戏的时间戳(毫秒);由 loadGame 用存档的 lastSave 补种
+let lastTickTime = null;
+
+// 离线额度(秒):"还没被结算"的时间。
+// 谁先来谁用 —— 主循环的补帧循环与页面加载时的离线碎片转化共用它,
+// 所以"开着窗口但被遮挡"和"完全关闭页面"的收益口径一致,
+// 不会出现两边都算一遍、或者两边都不算的时间黑洞。
+// (调试模式不限额度,与碎片消耗的处理保持一致)
+function offlineQuota(){
+    if(DEBUG.enabled)
+        return Infinity;
+    if(lastTickTime === null)
+        return 0;
+    return Math.max(0, (Date.now() - lastTickTime) / 1000);
+}
+
+// 确保计时基准已初始化(无存档 / 存档缺 lastSave 时兜底)。
+// 不初始化的话 offlineQuota() 永远返回 0,主循环第一帧就 return,
+// 整个游戏会静止不动。
+function ensureTickBase(){
+    if(lastTickTime === null)
+        lastTickTime = Date.now();
+}
+
+// 从额度里扣掉 consumed 秒(推进计时基准)
+function spendOfflineQuota(consumed){
+    if(DEBUG.enabled || lastTickTime === null)
+        return;
+    lastTickTime += consumed * 1000;
+}
+
+// 本帧已跑的补帧步数(每个 update 开头清零)
+let catchupSteps = 0;
+
+
+// 离线转化:把"没被主循环结算掉"的时长转成时间碎片(上限 = 储量上限)
 // 替代旧的离线收益系统:离线不再直接产出知识/理论力量/元-力量
+// 关键:转多少就扣多少额度 —— 扣不满的话下一秒又会再转一次,
+// 同一段时间会被反复发碎片。
 function applyOfflineToShards(){
-    let now = Date.now();
-    let last = game.lastSave || now;
-    let dtSec = (now - last) / 1000;
+    let dtSec = offlineQuota();
     if(dtSec < 5)
         return 0; // 间隔太短不算离线
     let gained = Math.min(
@@ -111,6 +172,14 @@ function applyOfflineToShards(){
     game.timeShards = Math.min(
         (game.timeShards || 0) + gained,
         timeMaxShards()
+    );
+    // 按"整份离线时长"扣额度;碎片封顶时只扣掉实际结算的量,
+    // 多余的额度留给主循环补帧(否则那段时间会凭空蒸发)
+    spendOfflineQuota(
+        Math.min(
+            dtSec,
+            Math.max(gained, MAX_FRAME_DT)
+        )
     );
     return gained;
 }
@@ -190,11 +259,22 @@ function refreshDebugInfo(){
 }
 
 
-// 当前每 tick 的基准时间步长(秒)
-const BASE_DT = 0.05;
+// 取本帧真实步长(秒)
+function takeRealDt(){
+    ensureTickBase();
+    let now = Date.now();
+    if(now <= lastTickTime)
+        return 0;
+    return (now - lastTickTime) / 1000;
+}
 
 
 loadGame();
+
+// 计时基准兜底:loadGame 会用存档的 lastSave 补种,
+// 但全新玩家(无存档)或存档缺 lastSave 时它仍是 null,
+// 这里补成当前时间,否则主循环会一直拿不到额度而不结算。
+ensureTickBase();
 
 
 // 初始化实验数据(首次进入生成,之后从存档读取保持不变)
@@ -490,17 +570,10 @@ function updateResearchButton(){
 }
 
 
-function update(){
+// 单步结算:推进 dt 秒的游戏状态(dt 已含加速倍率)
+// 由 update() 的补帧循环调用,一次 update 可能跑多步(积压时)
+function tickOnce(dt, mult){
 
-
-
-// 真实 tick 基准(BASE_DT 秒);先消耗碎片获得实际倍率
-// (碎片不足自动回 ×1;调试模式不消耗且全档可用)
-let mult =
-consumeTimeShards(BASE_DT);
-
-let dt =
-BASE_DT * mult;
 
 // 累计游戏总时间(加速计时,用于"高速研究"等成就)
 game.totalTime =
@@ -510,7 +583,7 @@ game.totalTime =
 let speed=
 getKnowledgeSpeed();
 
-let gain =
+let gain=
 speed.mul(dt);
 
 game.knowledge=
@@ -556,6 +629,84 @@ if(isAssistantEnabled("researchSummarizer")
     researchReset();
 }
 
+// 补帧步数计数(调用方据此做死循环兜底)
+catchupSteps++;
+
+
+}
+
+
+function update(){
+
+
+
+// 真实步长:按上一次结算到现在的实际间隔算(不是固定的 0.05 秒),
+// 这样标签页被浏览器节流到每秒 1 帧、或窗口被遮挡暂停渲染时
+// 进度不会按"帧数"缩水;超过 MAX_FRAME_DT 的部分由下面的"补帧"循环
+// 继续结算(与离线碎片转化共用一份额度),不会白丢。
+let realDt =
+takeRealDt();
+
+if(realDt <= 0)
+    return;
+
+// 本次要结算的总时长(秒);不超过离线额度
+let pendingDt =
+Math.min(realDt, offlineQuota());
+
+if(pendingDt <= 0)
+    return;
+
+catchupSteps = 0;
+
+// 补帧循环:把积压的时间切成 ≤ MAX_FRAME_DT 的小步依次结算。
+// 双重刹车:
+//   · 时间预算(CATCHUP_BUDGET_MS)—— 本帧最多花这么多毫秒,到点就停,
+//     剩下的额度留给下一帧接着补,页面不卡、时间不丢;
+//   · 步数兜底(MAX_CATCHUP_TICKS)—— 防极端情况下的死循环。
+// 平时 1 帧只有几十毫秒,循环只跑 1 次,开销可忽略。
+//
+// 碎片按"每一步实际结算的时长"扣(不能按 pendingDt 一次性扣:
+// 预算用完时只结算了一部分,先扣全部会多扣碎片)。
+let catchupStart =
+Date.now();
+
+let mult =
+currentTimeMult();
+
+while(pendingDt > 0){
+
+    let step =
+    Math.min(pendingDt, MAX_FRAME_DT);
+
+    // 按这一步的时长消耗碎片;碎片不足会自动降回 ×1,
+    // 后面的步骤就按 ×1 结算
+    mult =
+    consumeTimeShards(step);
+
+    pendingDt -= step;
+
+    // 结算掉的时间同步从额度里扣除(与离线转化共用同一本账)
+    spendOfflineQuota(step);
+
+    tickOnce(step * mult, mult);
+
+    if(catchupSteps > MAX_CATCHUP_TICKS)
+        break;
+
+    // 本帧预算用完 → 剩下的额度留到下一帧继续补
+    if(Date.now() - catchupStart >= CATCHUP_BUDGET_MS)
+        break;
+
+}
+
+
+// 渲染与剧情判定(每帧只跑一次,不参与补帧循环)
+// 注:补帧循环只管"推进状态",渲染留在这里,
+// 所以挂机回来补 1000 步也只渲染 1 次,不会卡。
+
+let speed=
+getKnowledgeSpeed();
 
 
 document
