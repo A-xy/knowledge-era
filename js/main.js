@@ -159,29 +159,35 @@ let catchupSteps = 0;
 
 // 离线转化:把"没被主循环结算掉"的时长转成时间碎片(上限 = 储量上限)
 // 替代旧的离线收益系统:离线不再直接产出知识/理论力量/元-力量
-// 关键:转多少就扣多少额度 —— 扣不满的话下一秒又会再转一次,
-// 同一段时间会被反复发碎片。
+//
+// 关键 1:转多少就扣多少额度 —— 扣不满的话下一秒又会再转一次,
+//   同一段时间会被反复发碎片。
+// 关键 2:离线时长要"全量"扣掉额度,不能只扣实际发出的碎片数。
+//   因为 gained 受储量上限封顶,离线超过上限时 gained < dtSec,
+//   若只扣 gained,剩下的额度会被主循环的补帧循环当成"挂机积压"
+//   逐步结算 —— 而这段时间已经算进离线碎片里了,等于白送一份收益。
+//   离线时长一律不补帧、只转碎片:超出上限的部分就是"溢出的那部分",
+//   本来就该丢弃(与"碎片储量上限=最多存 N 小时"的设计一致)。
 function applyOfflineToShards(){
     let dtSec = offlineQuota();
     if(dtSec < 5)
         return 0; // 间隔太短不算离线
+    // 转化前先记录,用于提示里显示"实际溢出丢弃了多少"
+    let before = game.timeShards || 0;
+    let capacity = timeMaxShards();
     let gained = Math.min(
         Math.floor(dtSec),
-        timeMaxShards()
+        capacity
     );
     game.timeShards = Math.min(
-        (game.timeShards || 0) + gained,
-        timeMaxShards()
+        before + gained,
+        capacity
     );
-    // 按"整份离线时长"扣额度;碎片封顶时只扣掉实际结算的量,
-    // 多余的额度留给主循环补帧(否则那段时间会凭空蒸发)
-    spendOfflineQuota(
-        Math.min(
-            dtSec,
-            Math.max(gained, MAX_FRAME_DT)
-        )
-    );
-    return gained;
+    // 整份离线时长全部从额度里扣掉(含溢出的、以及不足 1 秒的零头),
+    // 这样主循环拿到的额度就是 0,不会再去补帧重复结算这段时间。
+    spendOfflineQuota(dtSec);
+    // 实际入账的碎片(受总额上限约束),供提示显示
+    return game.timeShards - before;
 }
 
 
@@ -302,6 +308,8 @@ if(game.timeShards === undefined)
 
 // 离线转化:离线时长 → 时间碎片(替代旧离线收益系统)
 const OFFLINE_NOTICE_MS = 10000; // 离线提示显示时长(10 秒后自动消失)
+// 转化前先记下额度(= 本次离线总时长),提示里要显示"离线了多久"
+let offlineSeconds = offlineQuota();
 let offlineShards = applyOfflineToShards();
 let offlineNoticeTimer = null;
 if(offlineShards > 0){
@@ -310,7 +318,7 @@ if(offlineShards > 0){
         notice.style.display = "block";
         notice.innerText =
         "欢迎回来!你离线了 "
-        + formatOfflineTime(offlineShards)
+        + formatOfflineTime(offlineSeconds)
         + ",共获得 "
         + Math.floor(offlineShards)
         + " 时间碎片";

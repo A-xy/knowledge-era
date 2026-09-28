@@ -535,6 +535,14 @@
 <div id="aboutChangelogPage" style="display:none">
 
 <div class="changelog-entry">
+<h3>V0.7.2 小更新 <span class="changelog-date">2026/9/28</span></h3>
+<ul>
+<li>修复了离线时间碎片溢出时会额外触发补帧的问题(之前离线超过碎片储量上限时,超出的那部分时间会被当成挂机积压再结算一次,相当于多领了一份收益)</li>
+<li>离线提示现在显示的是真实的离线时长,不会再因为碎片封顶而显示成较短的时间</li>
+</ul>
+</div>
+
+<div class="changelog-entry">
 <h3>V0.7.1 小更新 <span class="changelog-date">2026/9/26</span></h3>
 <ul>
 <li>修复了游戏无法在后台挂机的问题(之前浏览器窗口被其它窗口遮挡,或者切到别的标签页时,游戏进度会停止)</li>
