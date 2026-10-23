@@ -348,6 +348,36 @@ color:#ffd97f;
 
 }
 
+
+/* 补帧时的"计算中"提示:浮在顶部中间,不挡点击 */
+#computingHint{
+
+position:fixed;
+
+top:16px;
+
+left:50%;
+
+transform:translateX(-50%);
+
+background:#1a1a22;
+
+border:1px solid #4a7ab8;
+
+border-radius:10px;
+
+padding:8px 22px;
+
+font-size:14px;
+
+color:#9fc4e8;
+
+z-index:9000;
+
+pointer-events:none;
+
+}
+
 #timePage .time-res{
 
 color:#ccc;
@@ -1241,6 +1271,46 @@ border-color:#2a6a4a;
 
 }
 
+
+/* 本源页子导航(里程碑 / 你的理论):蓝色调,与研究页的绿色区分 */
+.origin-subnav{
+
+margin:10px auto;
+
+display:flex;
+
+justify-content:center;
+
+gap:10px;
+
+}
+
+.origin-tab{
+
+padding:6px 24px;
+
+font-size:15px;
+
+cursor:pointer;
+
+background:#222;
+
+color:white;
+
+border:1px solid #555;
+
+border-radius:8px;
+
+}
+
+.origin-tab.active{
+
+background:#1a3a5e;
+
+border-color:#3a7ab8;
+
+}
+
 .game-stat{
 
 color:#ccc;
@@ -1500,6 +1570,242 @@ border-color:#555;
 color:#888;
 
 cursor:not-allowed;
+
+}
+
+
+/* 本源页"完成研究"按钮(本层级用蓝色调,与研究页的绿色区分) */
+#originResetBtn{
+
+background:#1a3a5e;
+
+border:1px solid #3a7ab8;
+
+color:white;
+
+padding:10px 24px;
+
+font-size:16px;
+
+border-radius:8px;
+
+cursor:pointer;
+
+margin-top:10px;
+
+}
+
+#originResetBtn:hover:enabled{
+
+background:#24507e;
+
+}
+
+#originResetBtn:disabled{
+
+background:#333;
+
+border-color:#555;
+
+color:#888;
+
+cursor:not-allowed;
+
+}
+
+
+/* ============================================================
+   本源页:蓝色调(研究页是绿色,这里整体换成蓝,避免层级混淆)
+   ============================================================ */
+#originPage .research-status,
+#originPage .research-card{
+
+background:#101a2a;
+
+border-color:#2a4a7a;
+
+}
+
+#originPage .research-status span,
+#originPage .research-card span{
+
+color:#7fb8f0;
+
+font-weight:bold;
+
+}
+
+#originPage .milestone.active{
+
+background:#101a2a;
+
+border:1px solid #4a7ab8;
+
+}
+
+#originPage .milestone .milestone-name{
+
+color:#7fb8f0;
+
+}
+
+#originPage .milestone .milestone-val{
+
+color:#9fc4e8;
+
+}
+
+
+/* 定理升级卡片(本源页蓝色调) */
+.theorem-card{
+
+background:#101a2a;
+
+border:1px solid #2a4a7a;
+
+border-radius:12px;
+
+padding:12px 18px;
+
+margin:10px auto;
+
+max-width:560px;
+
+text-align:left;
+
+}
+
+.theorem-card.active{
+
+border-color:#4a7ab8;
+
+}
+
+.theorem-head{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+gap:10px;
+
+}
+
+.theorem-name{
+
+color:#7fb8f0;
+
+font-weight:bold;
+
+font-size:15px;
+
+}
+
+.theorem-cost{
+
+color:#9fc4e8;
+
+font-size:14px;
+
+}
+
+.theorem-desc{
+
+color:#bbb;
+
+font-size:14px;
+
+margin:6px 0;
+
+}
+
+.theorem-owned{
+
+color:#7fb8f0;
+
+font-size:14px;
+
+font-weight:bold;
+
+padding:6px 0;
+
+}
+
+.theorem-btn{
+
+margin-top:6px;
+
+padding:7px 18px;
+
+font-size:14px;
+
+background:#1a3a5e;
+
+border:1px solid #3a7ab8;
+
+color:white;
+
+border-radius:8px;
+
+cursor:pointer;
+
+}
+
+.theorem-btn:hover:enabled{
+
+background:#24507e;
+
+}
+
+.theorem-btn:disabled{
+
+background:#333;
+
+border-color:#555;
+
+color:#888;
+
+cursor:not-allowed;
+
+}
+
+
+/* 定理升级下方的"重置定理升级":次要操作,灰色虚线 */
+.theorem-reset-row{
+
+margin:14px auto;
+
+max-width:560px;
+
+text-align:right;
+
+}
+
+.theorem-reset{
+
+padding:7px 16px;
+
+font-size:13px;
+
+background:transparent;
+
+border:1px dashed #3a5a8a;
+
+color:#8ab0d8;
+
+border-radius:8px;
+
+cursor:pointer;
+
+}
+
+.theorem-reset:hover{
+
+background:#14202e;
+
+border-color:#5a8ac0;
 
 }
 
@@ -2099,5 +2405,19 @@ color:#ccc;
 margin:4px 0;
 
 text-align:left;
+
+}
+
+.changelog-note{
+
+font-size:13px;
+
+color:#8a9a92;
+
+margin:10px 0 2px 0;
+
+text-align:left;
+
+font-style:italic;
 
 }

@@ -167,6 +167,8 @@ function actionPointsGain(){
     .mul(actionPointsStageMultiplier())
     // 效果6(引言·行动点加成):×(1+MetaPower)^0.1
     .mul(metaAPBonus())
+    // 本源层"你的理论":行动点获取 ×Effect(未解锁时 ×1)
+    .mul(ownTheoryEffect())
     .floor();
 
 }
@@ -186,14 +188,24 @@ function researchAPBonus(){
 
 
 // 里程碑是否已点亮
+// 正常情况下由研究阶段决定(阶段达标即点亮,阶段清零后随之熄灭);
+// 本源里程碑"记忆印记"(完成 3 次研究)点亮后,
+// 历史最高阶段达到过的里程碑不再随研究阶段清空。
 function isMilestoneActive(id){
 
     for(let i = 0; i < RESEARCH_MILESTONES.length; i++){
 
         let m = RESEARCH_MILESTONES[i];
 
-        if(m.id === id)
-            return game.researchStage >= m.stage;
+        if(m.id === id){
+
+            if(game.researchStage >= m.stage)
+                return true;
+
+            return originMilestoneActive(3)
+            && maxResearchStage() >= m.stage;
+
+        }
 
     }
 
@@ -202,18 +214,43 @@ function isMilestoneActive(id){
 }
 
 
-// 研究加成倍率:基于研究重置次数
-// 研究阶段 >= 1 时:×(1 + min(researchResets, 10)),否则 ×1
+// 有效研究重置次数
+// 本源升级"真·无尽阶梯":重置次数 × floor(√(累计本源+1))
+// 注意倍率按**累计本源**(totalOrigin,不扣消耗)计算 → 只增不减,
+// 买本源升级花掉本源也不会让它下降。
+function effectiveResearchResets(){
+
+    let base =
+    game.researchResets || 0;
+
+    if(!originUpgradeActive("trueStaircase"))
+        return base;
+
+    let mult =
+    totalOrigin().add(1).sqrt().floor();
+
+    // 兜底:本源极多时避免 number 溢出
+    if(mult.gt(1e15))
+        mult = new Decimal(1e15);
+
+    return base * mult.toNumber();
+
+}
+
+
+// 研究加成倍率:基于(有效)研究重置次数
+// 正常情况下:×(1 + min(resets, 10));
+// 本源升级"真·无尽阶梯"后:不再封顶
 function researchPowerBonus(){
 
     if(game.researchStage < 1)
         return new Decimal(1);
 
     let resets =
-    Math.min(
-        game.researchResets,
-        RESEARCH_CONFIG.bonusCap
-    );
+    effectiveResearchResets();
+
+    if(!originUpgradeActive("trueStaircase"))
+        resets = Math.min(resets, RESEARCH_CONFIG.bonusCap);
 
     return new Decimal(1)
     .add(resets);
@@ -246,10 +283,11 @@ function endlessStaircaseBonus(){
         return new Decimal(1);
 
     let resets =
-    Math.min(
-        game.researchResets,
-        RESEARCH_CONFIG.endlessResetCap
-    );
+    effectiveResearchResets();
+
+    // "真·无尽阶梯":移除 300 次的上限
+    if(!originUpgradeActive("trueStaircase"))
+        resets = Math.min(resets, RESEARCH_CONFIG.endlessResetCap);
 
     return new Decimal(1)
     .add(
@@ -260,13 +298,16 @@ function endlessStaircaseBonus(){
 }
 
 
-// "无尽阶梯"当前计入的重置次数(已封顶,用于展示)
+// "无尽阶梯"当前计入的重置次数(普通模式已封顶,用于展示)
 function endlessStaircaseResets(){
 
-    return Math.min(
-        game.researchResets,
-        RESEARCH_CONFIG.endlessResetCap
-    );
+    let resets =
+    effectiveResearchResets();
+
+    if(!originUpgradeActive("trueStaircase"))
+        return Math.min(resets, RESEARCH_CONFIG.endlessResetCap);
+
+    return resets;
 
 }
 
@@ -286,8 +327,27 @@ function applyResearchResetCore(gainAP, advanceStage){
     // 推进研究阶段:若重置时想法数达到当前阶段要求
     // researchStage 从 0 开始:第一次(12想法) → 阶段1
     if(advanceStage
-        && game.ideas >= nextStageIdeas())
-        game.researchStage++;
+        && game.ideas >= nextStageIdeas()){
+
+        // 成就"群星之上":一次提升到想法数能支撑的最高阶段
+        if(isAchievementUnlocked("batchStage")){
+
+            // 兜底:阶段需求随阶段递增,正常不会跑满
+            let guard = 0;
+
+            while(game.ideas >= nextStageIdeas()
+                && guard < 1000){
+                game.researchStage++;
+                guard++;
+            }
+
+        }else{
+
+            game.researchStage++;
+
+        }
+
+    }
 
     if(gainedAP.gt(0)){
 
@@ -604,13 +664,13 @@ function milestoneDesc(m){
 
     if(m.id === "stage1"){
 
-        let resets =
-        Math.min(
-            game.researchResets,
-            RESEARCH_CONFIG.bonusCap
-        );
+        let unlimited =
+        originUpgradeActive("trueStaircase");
 
-        return "知识与所有理论力量获取 ×(1+重置次数,最大10) | 当前 ×" + (1 + resets) + " ； 购买最大按钮始终可用";
+        return "知识与所有理论力量获取 ×(1+重置次数" +
+        (unlimited ? "" : ",最大10") +
+        ") | 当前 ×" + format(researchPowerBonus()) +
+        " ； 购买最大按钮始终可用";
     }
 
     if(m.id === "stage2"){
@@ -634,10 +694,14 @@ function milestoneDesc(m){
 
     if(m.id === "stage9"){
 
+        let unlimited =
+        originUpgradeActive("trueStaircase");
+
         return "所有实验助手速度 ×(1+研究重置次数/30) | 当前 ×" +
         format(endlessStaircaseBonus()) +
-        " (重置次数 " + endlessStaircaseResets() + "/" +
-        RESEARCH_CONFIG.endlessResetCap + " 封顶)";
+        " (重置次数 " + endlessStaircaseResets() +
+        (unlimited ? "" : "/" + RESEARCH_CONFIG.endlessResetCap + " 封顶") +
+        ")";
     }
 
     return m.desc;
@@ -742,6 +806,26 @@ const ASSISTANT_LIST = [
         expKey: "exp4",
         optimalOps: 6,
         desc: "自动完成实验4(DNA测序)"
+    },
+    {
+        // 本源里程碑"自动提升"(完成 4 次研究)后才出现
+        key: "promotor",
+        name: "助手提拔员",
+        price: new Decimal("1e85"),
+        originMilestone: 4,
+        desc: "自动升级四个自动实验助手(开启时持续消耗行动点)"
+    },
+    {
+        // 本源里程碑"自动发表"(完成 20 次研究)后才出现
+        // (排在最后:它是本源层最晚解锁的助手)
+        key: "paperPublisher",
+        name: "论文发表员",
+        price: new Decimal("1e90"),
+        originMilestone: 20,
+        threshold: true,
+        thresholdUnit: "本源",
+        thresholdAction: "自动完成研究",
+        desc: "自动完成研究(可设置本源阈值)"
     }
 ];
 
@@ -834,7 +918,12 @@ function toggleAssistant(key){
 // 绘制助手页面(增量渲染:unlocked/enabled 变化时重建)
 let lastHelperState = "";
 
-// 助手当前是否可见(有 stage 限制则需达到对应阶段;有 requires 则需前置已解锁)
+// 助手当前是否可见
+//   originMilestone: 需要点亮对应本源里程碑(助手提拔员)
+//   stage: 需要达到对应研究阶段。本源重置过之后,
+//          非自动实验助手仍保持可见(只是未购买状态);
+//          自动实验助手必须重新点亮研究里程碑3 才恢复显示
+//   requires: 前置助手已解锁(自动实验助手链式解锁)
 function assistantVisible(key){
 
     for(let i = 0; i < ASSISTANT_LIST.length; i++){
@@ -844,9 +933,23 @@ function assistantVisible(key){
         if(conf.key !== key)
             continue;
 
-        if(conf.stage !== undefined
-            && game.researchStage < conf.stage)
+        // 本源里程碑限定(助手提拔员)
+        if(conf.originMilestone !== undefined
+            && !originMilestoneActive(conf.originMilestone))
             return false;
+
+        if(conf.stage !== undefined
+            && game.researchStage < conf.stage){
+
+            // 自动实验助手与重复实验功能仍要重新到达里程碑3
+            if(conf.expKey)
+                return false;
+
+            // 经历过本源重置:其余助手永久可见(解锁状态仍会被重置)
+            if(originResets() < 1)
+                return false;
+
+        }
 
         // 前置助手未解锁 → 不显示(自动实验助手链式解锁)
         if(conf.requires !== undefined
@@ -1036,6 +1139,37 @@ function summarizerShouldReset(){
 }
 
 
+// 论文发表员:本源阈值(完成研究可获得 ≥ 该本源时自动完成研究)
+// 与研究总结员一样,设置值以字符串存储,支持科学计数法
+function publisherThreshold(){
+
+    let a =
+    game.assistants
+    ? game.assistants.paperPublisher
+    : null;
+
+    let v =
+    a
+    ? parseSettingValue(a.threshold, 1)
+    : null;
+
+    return v
+    ? v
+    : new Decimal(ORIGIN_CONFIG.publisherDefaultThreshold);
+
+}
+
+
+// 论文发表员此刻是否应触发完成研究
+function publisherShouldReset(){
+
+    return originGain().gte(
+        publisherThreshold()
+    );
+
+}
+
+
 // 设置研究总结员的阈值/倍数(field: "threshold" | "multiplier")
 // 支持科学计数法输入;非法输入忽略并把界面恢复为原值
 function setSummarizerSetting(key, field, val){
@@ -1050,8 +1184,15 @@ function setSummarizerSetting(key, field, val){
         return;
 
     if(parseSettingValue(val, 1) === null){
+
+        // 非法输入:不改存档,把输入框恢复成已保存的值
         renderResearchHelpers();
+
+        syncHelperInputs(
+            document.getElementById("researchHelpers"), true);
+
         return;
+
     }
 
     a[field] =
@@ -1060,6 +1201,10 @@ function setSummarizerSetting(key, field, val){
     saveGame();
 
     renderResearchHelpers();
+
+    // 输入框显示与存档值对齐(去掉首尾空格等)
+    syncHelperInputs(
+        document.getElementById("researchHelpers"), true);
 
 }
 
@@ -1298,6 +1443,58 @@ function upgradeExpAutoAssistant(key){
 }
 
 
+// ============================================================
+// 助手提拔员(本源里程碑"自动提升")
+// 开启时自动升级四个自动实验助手:反复购买升级直到行动点不足。
+// 这里直接改状态而不逐个调用 upgradeExpAutoAssistant(),
+// 否则每升一级都会存档并重建整个助手页,补帧时会非常慢;
+// 界面由渲染层按 level 的签名统一刷新。
+// ============================================================
+const PROMOTE_MAX_STEPS = 100;   // 单次每个助手的升级上限(防御性兜底)
+
+function promoteExpAssistants(){
+
+    if(!isAssistantEnabled("promotor"))
+        return false;
+
+    let upgraded = false;
+
+    for(let i = 0; i < ASSISTANT_LIST.length; i++){
+
+        let conf = ASSISTANT_LIST[i];
+
+        if(!conf.expKey)
+            continue;
+
+        let a = game.assistants[conf.key];
+
+        if(!a || !a.unlocked)
+            continue;
+
+        for(let s = 0; s < PROMOTE_MAX_STEPS; s++){
+
+            let cost = expAutoUpgradeCost(conf.key);
+
+            if(game.actionPoints.lt(cost))
+                break;
+
+            game.actionPoints =
+            game.actionPoints.sub(cost);
+
+            a.level =
+            (a.level || 0) + 1;
+
+            upgraded = true;
+
+        }
+
+    }
+
+    return upgraded;
+
+}
+
+
 // 每 tick 生产完成次数(仅启用的自动助手)
 // completions 存小数,显示与效果计算时向下取整
 function updateExpAutoAssistants(dt){
@@ -1366,10 +1563,150 @@ function expAutoOptimized(key){
 // 效率 = 基础速率 × 2^等级 × 元-力量效果5,其中效果5 随元-力量持续增长,
 // 所以必须每帧更新文本;但结构签名里不能放效率数值,否则会每帧重建整张卡片
 // (会打断研究总结员阈值输入框的输入、按钮点击态闪动)
+// 刷新助手卡片里按钮的可用状态(解锁 / 升级)
+// 行动点每帧都在变,如果把 AP 放进结构签名,卡片就会每帧重建,
+// 按钮在玩家点击的同一帧被替换 → 点击丢失(与时间页倍速按钮同一个坑)。
+// 这里只改 disabled,不动 DOM 结构。
+function refreshHelperButtons(card, conf, a){
+
+    if(!card || !card.querySelector)
+        return;
+
+    // 未解锁:按解锁价格判断
+    if(!a.unlocked){
+
+        let btn =
+        card.querySelector(
+            ".assistant-btn:not(.toggle):not(.upgrade):not(.mode)"
+        );
+
+        if(btn)
+            btn.disabled =
+            game.actionPoints.lt(conf.price);
+
+        return;
+
+    }
+
+    // 已解锁:自动实验助手的升级按钮
+    // 等级会变(助手提拔员每 tick 升级)→ 价格文本也要跟着刷新,
+    // 所以等级不进结构签名,只在这里改文字 + disabled。
+    if(conf.expKey){
+
+        let btn =
+        card.querySelector(".assistant-btn.upgrade");
+
+        if(btn){
+
+            let cost =
+            expAutoUpgradeCost(conf.key);
+
+            btn.disabled =
+            game.actionPoints.lt(cost);
+
+            let label =
+            "升级(" + format(cost) + " AP)";
+
+            if(btn.textContent !== label)
+                btn.textContent = label;
+
+        }
+
+    }
+
+}
+
+
+// 只刷新助手卡片里的"文本型状态"(阈值/倍数输入框的值、自动实验助手等级)
+// 这些值不进结构签名,否则每次变化都会重建整张列表;
+// 但重建会替换掉玩家正在输入的输入框(value 被回写成存档值)、
+// 也会在"助手提拔员每 tick 升级"时把列表刷得飞快。
+//
+// ⚠ 输入框的刷新判据是"存档里的值有没有变"(每个 input 上记一份 _syncedValue),
+//   而不是"输入框内容是否等于存档值"。玩家打了一半还没 onchange 提交时,
+//   两者本来就不相等 —— 用后者判断会把没提交的输入直接擦掉。
+//   force = true:强制回写(非法输入被拒 / 值被程序改写时对齐显示)
+function syncHelperInputs(box, force){
+
+    if(!box || !box.children)
+        return;
+
+    for(let i = 0; i < box.children.length; i++){
+
+        let card = box.children[i];
+
+        let key =
+        card ? card._assistantKey : null;
+
+        if(!key)
+            continue;
+
+        let a =
+        game.assistants[key];
+
+        if(!a)
+            continue;
+
+        // 等级文本(助手提拔员会持续升级)
+        let lv =
+        card.querySelector
+        ? card.querySelector(".assistant-level")
+        : null;
+
+        if(lv){
+
+            let txt = "等级 " + (a.level || 0);
+
+            if(lv.textContent !== txt)
+                lv.textContent = txt;
+
+        }
+
+        // 阈值 / 倍数输入框
+        if(!card.querySelectorAll)
+            continue;
+
+        let inputs =
+        card.querySelectorAll(".assistant-input");
+
+        for(let j = 0; j < inputs.length; j++){
+
+            let input = inputs[j];
+
+            let field =
+            input.getAttribute
+            ? input.getAttribute("data-field")
+            : null;
+
+            if(!field || a[field] === undefined)
+                continue;
+
+            let v =
+            String(a[field]);
+
+            // 存档值没变 → 不碰输入框(可能正被玩家编辑)
+            if(!force && input._syncedValue === v)
+                continue;
+
+            if(input.value !== v)
+                input.value = v;
+
+            input._syncedValue = v;
+
+        }
+
+    }
+
+}
+
+
 function refreshHelperRates(box){
 
     if(!box || !box.children)
         return;
+
+    // 输入框 / 等级等文本状态先补齐(轻量,不动 DOM 结构)
+    syncHelperInputs(box, false);
 
     for(let i = 0; i < box.children.length; i++){
 
@@ -1390,7 +1727,13 @@ function refreshHelperRates(box){
         let a =
         game.assistants[key];
 
-        if(!a || !a.unlocked)
+        if(!a)
+            continue;
+
+        // 按钮可用性随行动点实时变化 → 轻量刷新(不能靠重建卡片)
+        refreshHelperButtons(card, conf, a);
+
+        if(!a.unlocked)
             continue;
 
         // 自动实验助手:刷新"效率"
@@ -1459,11 +1802,11 @@ function renderResearchHelpers(){
     if(!box)
         return;
 
-    // 状态没变 → 不重建
-    // 注意:包含当前行动点——研究重置/购买会使 AP 变化,
-    // 若不含则按钮 disabled 状态不会更新(需刷新才修复)
-    let stateStr =
-    "ap:" + game.actionPoints.toString() + ";";
+    // 结构签名:只放"会改变卡片结构"的状态(解锁/开关/等级/模式/阈值设置)
+    // ⚠ 不要放行动点:研究层 AP 每帧都在涨,签名一变就重建卡片,
+    //   按钮会在玩家点击的同一帧被替换掉(和时间页倍速按钮同一个坑)。
+    //   AP 引起的按钮禁用状态由 refreshHelperRates() 轻量刷新。
+    let stateStr = "";
 
     for(let i = 0; i < ASSISTANT_LIST.length; i++){
 
@@ -1476,7 +1819,11 @@ function renderResearchHelpers(){
         let a = game.assistants[key];
 
         // 模式/倍数解锁状态会影响卡片结构(模式按钮是否出现)→ 纳入签名
-        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.threshold || 0) + ":" + (a.level || 0) + ":" + (a.mode || "") + ":" + (a.multiplier || 0) + ":" + (key === "researchSummarizer" && summarizerModeUnlocked() ? 1 : 0) + ";";
+        // ⚠ 阈值/倍数/等级**不进签名**:它们只影响卡片里的文本值,
+        //   放进签名会让整张列表在"助手提拔员每 tick 升级"或"玩家刚改完设置"时重建,
+        //   正在输入的阈值输入框会被替换 → 输入被吞(论文发表员/研究总结员都中招)。
+        //   这些值改由 syncHelperInputs() 轻量刷新。
+        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.mode || "") + ":" + (key === "researchSummarizer" && summarizerModeUnlocked() ? 1 : 0) + ";";
     }
 
     // 结构没变 → 不重建卡片,只刷新"效率"数值文本
@@ -1587,7 +1934,7 @@ function renderResearchHelpers(){
                             html +=
                             "<div class=\"assistant-threshold\">" +
                             "重置可获得的 AP 达到上次重置获得 AP 的 " +
-                            "<input class=\"assistant-input\" type=\"text\" inputmode=\"decimal\" " +
+                            "<input class=\"assistant-input\" data-field=\"multiplier\" type=\"text\" inputmode=\"decimal\" " +
                             "value=\"" + a.multiplier +
                             "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'multiplier', this.value)\">" +
                             " 倍时自动重置(即 <span class=\"assistant-target\" data-summarizer-target" +
@@ -1596,26 +1943,41 @@ function renderResearchHelpers(){
 
                         }else{
 
+                            // 阈值单位/动作按助手配置决定
+                            // (研究总结员:AP / 研究重置;论文发表员:本源 / 完成研究)
+                            let unit =
+                            conf.thresholdUnit || "AP";
+
+                            let action =
+                            conf.thresholdAction || "自动重置";
+
                             html +=
                             "<div class=\"assistant-threshold\">" +
                             "重置可获得 " +
-                            "<input class=\"assistant-input\" type=\"text\" inputmode=\"decimal\" " +
+                            "<input class=\"assistant-input\" data-field=\"threshold\" type=\"text\" inputmode=\"decimal\" " +
                             "value=\"" + a.threshold +
                             "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'threshold', this.value)\">" +
-                            " AP 时自动重置" +
+                            " " + unit + " 时" + action +
                             "</div>";
 
                         }
 
                     }else{
 
+                        // 没有模式切换的助手(如论文发表员)同样按配置显示单位/动作
+                        let unit =
+                        conf.thresholdUnit || "AP";
+
+                        let action =
+                        conf.thresholdAction || "自动重置";
+
                         html +=
                         "<div class=\"assistant-threshold\">" +
                         "重置可获得 " +
-                        "<input class=\"assistant-input\" type=\"text\" inputmode=\"decimal\" " +
+                        "<input class=\"assistant-input\" data-field=\"threshold\" type=\"text\" inputmode=\"decimal\" " +
                         "value=\"" + a.threshold +
                         "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'threshold', this.value)\">" +
-                        " AP 时自动重置" +
+                        " " + unit + " 时" + action +
                         "</div>";
 
                     }

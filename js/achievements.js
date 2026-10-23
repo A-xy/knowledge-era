@@ -21,6 +21,9 @@
 //   buyMax    全部最大按钮永久解锁(不被想法重置影响)
 //   summarizerMode 解锁研究总结员的"倍数模式"(阈值 ↔ 倍数可切换)
 //   record    纯记录型(解锁内容由已有机制自动提供,仅登记)
+//   keepIdeas 获得想法时不再重置知识/理论(本源层成就「新起点」)
+//   batchIdea 允许一次获取多个想法(成就「想法宇宙」)
+//   batchStage 允许一次提升多个研究阶段(成就「群星之上」)
 // check: 达成条件函数
 // 说明:格子上点击可选中,选中的成就会在上方详情面板中显示条件/奖励/状态。
 const ACHIEVEMENT_LIST = [
@@ -293,7 +296,7 @@ const ACHIEVEMENT_LIST = [
     },
     {
         id: "keyBreakthrough",
-        name: "关键突破",
+        name: "并非终极理论",
         condDesc: "在前沿领域中达到 1e180 知识",
         rewardDesc: "解锁新的理论",
         unlock: "record",
@@ -345,6 +348,55 @@ const ACHIEVEMENT_LIST = [
         rewardDesc: "解锁新的层级",
         unlock: "record",
         check: function(){ return paperOwned("conclusion"); }
+    },
+    // ---- 第八行 ----
+    {
+        // 首次完成本源层的研究(本源重置)
+        id: "newStart",
+        name: "新起点",
+        condDesc: "完成 1 次研究",
+        rewardDesc: "获得想法时不再进行重置",
+        unlock: "keepIdeas",
+        check: function(){ return originResets() >= 1; }
+    },
+    {
+        id: "originUpgrade1",
+        name: "改写规则",
+        condDesc: "购买一个本源升级",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){ return originUpgradePurchasedCount() > 0; }
+    },
+    {
+        id: "batchIdea",
+        name: "想法宇宙",
+        condDesc: "拥有 56 个想法",
+        rewardDesc: "允许批量获取想法",
+        unlock: "batchIdea",
+        check: function(){ return game.ideas >= 56; }
+    },
+    {
+        id: "batchStage",
+        name: "群星之上",
+        condDesc: "达到研究阶段 12",
+        rewardDesc: "允许批量提升研究阶段",
+        unlock: "batchStage",
+        check: function(){ return game.researchStage >= 12; }
+    },
+    {
+        id: "allOriginMilestone",
+        name: "专精研究",
+        condDesc: "获得所有本源里程碑",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){
+            let maxN = 0;
+            for(let i = 0; i < ORIGIN_CONFIG.milestones.length; i++){
+                if(ORIGIN_CONFIG.milestones[i].n > maxN)
+                    maxN = ORIGIN_CONFIG.milestones[i].n;
+            }
+            return originResets() >= maxN;
+        }
     }
 ];
 

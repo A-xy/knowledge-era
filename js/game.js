@@ -19,7 +19,7 @@ metaPower:new Decimal(0),
 
 // 时间碎片系统
 // timeShards: 离线时间转化来的碎片(离线1秒→1碎片;储量上限)
-// timeMult: 当前加速倍数(1=不加速;消耗碎片加速,倍率-1/秒)
+// timeMult: 当前加速倍数(1=不加速;消耗碎片加速,(倍率-1)^2/秒)
 timeShards:0,
 timeMult:1,
 debugSpeed:1,   // 兼容旧存档:旧调试速度(读取后迁移到 timeMult)
@@ -80,6 +80,41 @@ conclusionUnlocked:false,
 refLegacyTheoryUnlocked:false,
 refTheory6Unlocked:false,
 refExperimentUnlocked:false,
+
+// 本源系统(论文"结论"完成后解锁的第三声望层级)
+// origin             : 本源(完成研究获得;用途后续补充)
+// originResets       : 已完成的研究次数(本源里程碑依据;不被本源重置清空)
+// originUnlocked     : 本源页面永久解锁标记(升级结论后置位,此后不再消失)
+// maxResearchStage   : 历史最高研究阶段(本源里程碑"记忆印记"保留研究里程碑用)
+// conclusionStorySeen: 首次编写"结论"时的剧情已看过
+origin:new Decimal(0),
+originResets:0,
+originUnlocked:false,
+maxResearchStage:0,
+conclusionStorySeen:false,
+
+// 完成研究的统计(用时与本源速率都是实时算的,不留历史快照)
+// lastOriginResetTime: 本轮研究开始的游戏时间(秒;本源未解锁时为 null)
+lastOriginResetTime:null,
+
+// 你的理论(本源层第二子页;第一次完成研究后解锁)
+// ownTheory         : 理论力量 p(刚解锁与每次完成研究时重置为 1)
+// theorems          : 三种途径各自已获得的定理数(只增不减)
+//                     { knowledge, ap, origin }
+// theoremUpgrades   : 消耗定理的升级状态 { powerSquared: true }
+// totalOrigin       : 累计获得的本源(不扣消耗,供定理门槛判断)
+// ownTheoryStorySeen: 首次完成研究后的剧情已看过
+ownTheory:new Decimal(1),
+theorems:{ knowledge:0, ap:0, origin:0 },
+theoremUpgrades:{},
+totalOrigin:new Decimal(0),
+ownTheoryStorySeen:false,
+
+// 本源升级(消耗本源;本源不会被完成研究重置)
+// multiPaper    : 多元论文(一次性)
+// trueStaircase : 真·无尽阶梯(一次性)
+// deepOrigin    : 深入本源(可无限升级,存等级)
+originUpgrades:{},
 
 // 成就系统:已达成成就登记 { id: true }
 achievements:{},
@@ -148,6 +183,18 @@ expAuto4:{
 unlocked:false,
 enabled:true,
 level:0
+},
+// 助手提拔员:本源里程碑"自动提升"后出现在助手页;开启时自动升级四个自动实验助手
+promotor:{
+unlocked:false,
+enabled:true
+},
+// 论文发表员:本源里程碑"自动发表"后出现在助手页;
+// 开启时在本源达到阈值(threshold,字符串,支持科学计数法)后自动完成研究
+paperPublisher:{
+unlocked:false,
+enabled:true,
+threshold:"1"
 }
 },
 

@@ -237,6 +237,9 @@ async function importSave(){
         // frontier.js 的 ensurePaperCompat() 按 FRONTIER_CONFIG 自动补齐
         ensurePaperCompat();
 
+        // 本源层字段(ensureOriginCompat,见 origin.js)
+        ensureOriginCompat();
+
         // 兼容旧存档:成就相关字段(ensureAchievementCompat,见 achievements.js)
         ensureAchievementCompat();
 
@@ -275,7 +278,9 @@ async function importSave(){
                 expAuto1: { unlocked: false, enabled: true, level: 0 },
                 expAuto2: { unlocked: false, enabled: true, level: 0 },
                 expAuto3: { unlocked: false, enabled: true, level: 0 },
-                expAuto4: { unlocked: false, enabled: true, level: 0 }
+                expAuto4: { unlocked: false, enabled: true, level: 0 },
+                promotor: { unlocked: false, enabled: true },
+                paperPublisher: { unlocked: false, enabled: true, threshold: "1" }
             };
 
             for(let key in defaults){
@@ -461,6 +466,9 @@ function loadGame(){
     // 统一由 frontier.js 的 ensurePaperCompat() 按配置补齐
     ensurePaperCompat();
 
+    // 本源层(论文"结论"之后):origin / originResets / 历史最高阶段
+    ensureOriginCompat();
+
     // 成就相关字段(ensureAchievementCompat,见 achievements.js)
     ensureAchievementCompat();
 
@@ -499,7 +507,9 @@ function loadGame(){
             expAuto1: { unlocked: false, enabled: true, level: 0 },
             expAuto2: { unlocked: false, enabled: true, level: 0 },
             expAuto3: { unlocked: false, enabled: true, level: 0 },
-            expAuto4: { unlocked: false, enabled: true, level: 0 }
+            expAuto4: { unlocked: false, enabled: true, level: 0 },
+            promotor: { unlocked: false, enabled: true },
+            paperPublisher: { unlocked: false, enabled: true, threshold: "1" }
         };
 
         for(let key in defaults){

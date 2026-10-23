@@ -476,6 +476,11 @@ function metaPowerGain(){
         exp1CompletionBonus()
     );
 
+    // 本源层"你的理论":元-力量获取 ×Effect(未解锁时 ×1)
+    gain = gain.mul(
+        ownTheoryEffect()
+    );
+
     return gain;
 }
 
@@ -494,12 +499,9 @@ function updateMetaPower(dt){
 }
 
 
-// 获得想法:重置知识与理论,ideas + 1
+// 单次获得想法的状态变更(不含存档 / 剧情 / 渲染)
 // 元-力量保留(它是跨重置的永久资源)
-function getIdea(){
-
-    if(!canGetIdea())
-        return;
+function applyOneIdea(){
 
     game.ideas++;
 
@@ -511,24 +513,62 @@ function getIdea(){
         || game.ideas > game.maxIdeas)
         game.maxIdeas = game.ideas;
 
-    // 重置知识(成就"新篇之始"达成后:保留 10 知识)
-    game.knowledge =
-    isAchievementUnlocked("stage1")
-    ? new Decimal(10)
-    : new Decimal(0);
+    // 成就"新起点"(完成 1 次研究)达成后:获得想法不再重置任何东西,
+    // 只是想法数量 +1(想法价格仍按 ideas 递增)
+    if(!isAchievementUnlocked("newStart")){
 
-    // 重置所有理论
-    for(let id in game.theories){
+        // 重置知识(成就"新篇之始"达成后:保留 10 知识)
+        game.knowledge =
+        isAchievementUnlocked("stage1")
+        ? new Decimal(10)
+        : new Decimal(0);
 
-        let t =
-        game.theories[id];
+        // 重置所有理论
+        for(let id in game.theories){
 
-        t.unlocked = false;
-        t.level = 0;
-        t.power =
-        new Decimal(1);
+            let t =
+            game.theories[id];
+
+            t.unlocked = false;
+            t.level = 0;
+            t.power =
+            new Decimal(1);
+
+        }
 
     }
+
+}
+
+
+// 单次调用最多批量获得多少个想法(防极端情况下卡住主线程;
+// 未达上限时下一帧会继续)
+const IDEA_BATCH_MAX = 100;
+
+
+// 获得想法:重置知识与理论,ideas + 1
+// 成就"想法宇宙"达成后:一次买到知识不足为止
+// (只有"新起点"生效、知识不被重置时才可能连续获取多个)
+function getIdea(){
+
+    if(!canGetIdea())
+        return;
+
+    let batch =
+    isAchievementUnlocked("batchIdea");
+
+    let n = 0;
+
+    do{
+
+        applyOneIdea();
+
+        n++;
+
+        if(!batch)
+            break;
+
+    }while(canGetIdea() && n < IDEA_BATCH_MAX);
 
     // 保存(元-力量与想法数已持久化)
     saveGame();

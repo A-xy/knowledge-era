@@ -1454,8 +1454,16 @@ function renderExpStats(key, boxId, firstEffectDesc){
     e.operationCount +
     "</b> 次操作(测量与提交次数总和)</p>";
 
-    // 里程碑3 且至少重新开始过一次:额外信息
-    if(isMilestoneActive("stage3") && e.restarted){
+    // 长期统计(最少操作数 / 首次完成效果 / 完成次数)
+    // 显示条件:
+    //   · 研究阶段3 且曾重新开始过(原有逻辑)
+    //   · 或者经历过本源重置 —— 此时研究阶段会归零,但首次完成效果(bestEver)、
+    //     最优操作数与完成次数都是永久资产,应当始终可见
+    let showLongStats =
+    (isMilestoneActive("stage3") && e.restarted)
+    || (originResets() > 0 && (e.completed || e.bestEver));
+
+    if(showLongStats){
 
         html +=
         "<p class=\"exp-hint\">此实验中,你使用操作最少的一次使用了 <b>" +
@@ -1467,18 +1475,22 @@ function renderExpStats(key, boxId, firstEffectDesc){
         firstEffectDesc +
         "</p>";
 
-        // 多次完成效果:仅 completions>=2 时显示具体值(避免 completions=1 显示无意义公式)
-        // 取整显示(自动助手可产生小数完成次数)
+        // 完成次数:>=1 就显示
+        // (本源重置后完成次数会变成 1,玩家需要看到这个状态);
+        // 重复完成效果从第 2 次起才生效,所以只有 1 次时不附带说明
         let comp = expCompletions(key);
 
-        if(comp >= 2){
+        if(comp >= 1){
 
             html +=
             "<p class=\"exp-hint\">你已完成了 <b>" +
             format(comp) +
-            "</b> 次此实验,使得:" +
-            expMultiEffectText(key, comp) +
-            "</p>";
+            "</b> 次此实验";
+
+            if(comp >= 2)
+                html += ",使得:" + expMultiEffectText(key, comp);
+
+            html += "</p>";
 
         }
 

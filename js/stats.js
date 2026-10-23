@@ -464,7 +464,9 @@ function gameStatsKey(){
         (game.researchResets > 0 || game.researchStage >= 1
             || game.researchStorySeen) ? 1 : 0,
         (game.researchResets >= 1) ? 1 : 0,
-        (game.researchStage >= 3) ? 1 : 0
+        (game.researchStage >= 3) ? 1 : 0,
+        // 第 5 段:完成过研究后,累计行动点改为"本次研究"口径
+        (typeof originResets === "function" && originResets() >= 1) ? 1 : 0
     ].join(":");
 
 }
@@ -522,6 +524,10 @@ function renderGameStats(){
     let showStage3 =
     parts[3] === "1";
 
+    // 完成过研究:累计行动点会随本源重置清零,文案改为"本次研究中"
+    let showOrigin =
+    parts[4] === "1";
+
     if(key !== lastGameStatsKey){
 
         lastGameStatsKey = key;
@@ -537,8 +543,14 @@ function renderGameStats(){
         }
 
         if(showResearch){
+            // 完成过一次研究后,累计行动点每轮都会清零 →
+            // 文案改成"在本次研究中"
             html +=
-            '<div class="game-stat">你累计获得了<span class="stat-val gs-totalap"></span>行动点</div>' +
+            '<div class="game-stat">' +
+            (showOrigin
+                ? "在本次研究中，你累计获得了"
+                : "你累计获得了") +
+            '<span class="stat-val gs-totalap"></span>行动点</div>' +
             '<div class="game-stat">你一共进行了<span class="stat-val gs-resets"></span>次研究重置</div>';
         }
 

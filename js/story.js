@@ -222,6 +222,59 @@ const theory6StoryLines=[
 ];
 
 
+// 首次编写论文"结论"时的剧情(解锁本源层)
+const conclusionStoryLines=[
+
+
+"你写完了你的论文。",
+
+
+"现在，你可以发表这篇论文，完成你的这项研究了。",
+
+
+"由此，你可以获得一些更本质的东西——本源。",
+
+
+"之后，你将开始一个新的研究项目。",
+
+
+"你之前的研究进度会重置，但已经获得的本源会留下来。"
+
+
+];
+
+
+// 第一次完成研究后的剧情(解锁"你的理论")
+const ownTheoryStoryLines=[
+
+
+"你开始了一项新的研究。",
+
+
+"不过，通过之前研究的经验，你可以获得一些里程碑奖励，以在开始新研究时保留一些内容。",
+
+
+"同时，基于你发表的论文，你建立了属于你自己的理论。",
+
+
+"你的理论中有公式，它决定了理论能带来多大的效果。",
+
+
+"理论力量会自行增长，而每一个定理，都会让它增长得更快。",
+
+
+"定理可以用知识、行动点与本源换取——它们也会记下你走过多远。",
+
+
+"公式并非不可更改。消耗定理，你可以改写它。",
+
+
+"这是你的理论了。从这里开始，没有人替你决定它会长成什么样。"
+
+
+];
+
+
 // 当前正在播放的剧情(开局或想法)
 let currentStoryLines = storyLines;
 
@@ -358,6 +411,22 @@ playStoryLines(stage4FrontierStoryLines);
 function showTheory6Story(){
 
 playStoryLines(theory6StoryLines);
+
+}
+
+
+// 播放"完成论文结论"剧情(解锁本源层)
+function showConclusionStory(){
+
+playStoryLines(conclusionStoryLines);
+
+}
+
+
+// 播放"第一次完成研究"剧情(解锁"你的理论")
+function showOwnTheoryStory(){
+
+playStoryLines(ownTheoryStoryLines);
 
 }
 

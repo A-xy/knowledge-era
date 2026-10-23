@@ -11,7 +11,7 @@ const DEBUG = {
 // ============================================================
 // 时间碎片系统
 // 离线时每 1 秒离线时间 → 1 时间碎片;消耗碎片加速游戏。
-// 消耗速度 = (加速倍数-1)/秒(真实时间);碎片耗尽自动回 ×1。
+// 消耗速度 = (加速倍数-1)^2/秒(真实时间);碎片耗尽自动回 ×1。
 // 储量上限 = 4 小时(14400),离线超过部分丢弃。
 // 档位:×1/×2/×5/×10/×50/×100;普通模式初始解锁 ×1/×2,
 //       更高档位待成就解锁;调试模式(DEBUG.enabled)解锁全部且不耗碎片。
@@ -71,14 +71,24 @@ function setTimeMult(mult){
 }
 
 
+// 加速 x 倍的碎片消耗速度 = (x-1)^2 /秒(真实时间)
+// 用平方而不是线性,是为了让高倍率真正"贵"起来:
+//   ×2 → 1/s(不变)  ×3 → 4/s  ×5 → 16/s  ×10 → 81/s  ×100 → 9801/s
+// 所有需要显示/结算消耗的地方都走这个入口,避免两处公式不同步。
+function timeShardRate(mult){
+    let n = Math.max(mult - 1, 0);
+    return n * n;
+}
+
+
 // 每真实 tick 消耗碎片(调用方传真实时间步长)
-// 消耗 = (倍数-1) × 真实秒;碎片不足 → 自动回 ×1
+// 消耗 = (倍数-1)^2 × 真实秒;碎片不足 → 自动回 ×1
 // 返回当前实际生效倍数(可能已被降回 1)
 function consumeTimeShards(realDt){
     let mult = currentTimeMult();
     if(mult <= 1 || DEBUG.enabled)
         return mult;
-    let need = (mult - 1) * realDt;
+    let need = timeShardRate(mult) * realDt;
     if(game.timeShards >= need){
         game.timeShards -= need;
         return mult;
@@ -113,6 +123,11 @@ const CATCHUP_BUDGET_MS = 12;
 // 兜底:单次 update 最多补多少步(防极端情况死循环;
 // 正常情况由时间预算先触发)
 const MAX_CATCHUP_TICKS = 100000;
+
+// 积压超过这个时长(秒)时,显示"计算中"提示
+// (浏览器在同步循环里不会重绘,所以提示只能在这一帧结束后才真正可见;
+//  补帧跨帧时会一直保持,补完再延迟淡出)
+const COMPUTE_HINT_SECONDS = 1;
 
 
 // ============================================================
@@ -191,7 +206,15 @@ function applyOfflineToShards(){
 }
 
 
-// 渲染时间页(增量:碎片整数/档位/解锁态变化时重建按钮区)
+// 轻量刷新时间页里每帧都会变的数字(只改 textContent,不重建 DOM)
+function refreshTimeNumbers(){
+    let el = document.getElementById("timeShardVal");
+    if(el)
+        el.innerText = Math.floor(timeShards());
+}
+
+
+// 渲染时间页(增量:仅在"结构"变化时重建按钮区)
 let lastTimeKey = "";
 function renderTimePage(){
     let panel = document.getElementById("timePanel");
@@ -202,13 +225,21 @@ function renderTimePage(){
         hint.style.display =
         DEBUG.enabled ? "block" : "none";
     }
-    let key = Math.floor(timeShards()) + ":" + timeMaxShards() + ":" +
+    // 结构签名:只放"会改变 DOM 结构"的东西(当前档位 / 储量上限 / 解锁档位)。
+    // ⚠ 绝对不能放时间碎片数值:加速时碎片每帧都在减少,签名一变就重建
+    //   innerHTML,按钮会在玩家点击的同一帧被替换掉,点击直接丢失 ——
+    //   表现为"点了别的倍速没反应"(×5 消耗最快,所以最容易碰上)。
+    let key = timeMaxShards() + ":" +
         currentTimeMult() + ":" + timeMaxMult();
-    if(key === lastTimeKey) return;
+    if(key === lastTimeKey){
+        // 结构没变 → 只刷新碎片数字
+        refreshTimeNumbers();
+        return;
+    }
     lastTimeKey = key;
     let html = "";
-    // 碎片储量
-    html += '<div class="time-res">时间碎片:<span class="time-shard">' +
+    // 碎片储量(数值由 refreshTimeNumbers 每帧单独刷新)
+    html += '<div class="time-res">时间碎片:<span class="time-shard" id="timeShardVal">' +
         Math.floor(timeShards()) + '</span> / ' +
         Math.floor(timeMaxShards()) +
         '(储量上限 ' + (timeMaxShards()/3600) + ' 小时)</div>';
@@ -218,7 +249,7 @@ function renderTimePage(){
         (mult > 1
             ? (DEBUG.enabled
                 ? ' <span class="time-cost">调试模式免费</span>'
-                : ' <span class="time-cost">消耗 ' + (mult - 1) + ' 碎片/秒</span>')
+                : ' <span class="time-cost">消耗 ' + timeShardRate(mult) + ' 碎片/秒</span>')
             : '') +
         '</div>';
     // 档位按钮(仅显示已解锁的档位)
@@ -228,7 +259,7 @@ function renderTimePage(){
         if(timeMultUnlocked(m)){
             let active = (mult === m) ? ' active' : '';
             html += '<button class="time-btn' + active + '" data-mult="' + m + '">×' + m +
-                (m > 1 ? '<small>' + (m - 1) + '/s</small>' : '') + '</button>';
+                (m > 1 ? '<small>' + timeShardRate(m) + '/s</small>' : '') + '</button>';
         }
     }
     html += '</div>';
@@ -262,6 +293,59 @@ function refreshDebugInfo(){
     }else{
         info.style.display = "none";
     }
+}
+
+
+// ============================================================
+// 补帧提示"计算中"
+// 补帧是同步 while 循环,循环执行期间浏览器不会重绘,
+// 所以这里只在循环前后改 display,真正可见要等这一帧结束。
+// 跨帧补帧时(预算用完、还没补完)提示会一直保持,补完后延迟淡出。
+// ============================================================
+let computingVisible = false;
+let computingHideTimer = null;
+
+function setComputing(on){
+
+    let el =
+    document.getElementById("computingHint");
+
+    if(!el)
+        return;
+
+    if(on){
+
+        if(computingHideTimer){
+            clearTimeout(computingHideTimer);
+            computingHideTimer = null;
+        }
+
+        if(!computingVisible){
+            computingVisible = true;
+            el.style.display = "block";
+        }
+
+        return;
+
+    }
+
+    // 关闭:延迟 400ms,避免"补完立刻隐藏"导致根本看不见
+    if(!computingVisible || computingHideTimer)
+        return;
+
+    computingHideTimer = setTimeout(function(){
+
+        computingHideTimer = null;
+        computingVisible = false;
+
+        let e =
+        document.getElementById("computingHint");
+
+        if(e)
+            e.style.display = "none";
+
+    }, 400);
+
 }
 
 
@@ -393,6 +477,7 @@ function formatOfflineTime(sec){
         knowledge: "knowledgePage",
         idea: "ideaPage",
         research: "researchPage",
+        origin: "originPage",
         time: "timePage",
         achievement: "achievementPage",
         save: "savePage",
@@ -618,6 +703,9 @@ updateExpAutoAssistants(dt);
 // 前沿领域:以与知识获取速率相同的速率累计灵感(仅前沿领域中)
 updateFrontier(dt);
 
+// 你的理论:理论力量自行增长 + 定理入账(第一次完成研究后解锁)
+updateOwnTheory(dt);
+
 
 // 助手:理论研究员——自动解锁和升级理论
 if(isAssistantEnabled("theorist")){
@@ -636,6 +724,18 @@ if(isAssistantEnabled("researchSummarizer")
     && summarizerShouldReset()){
     researchReset();
 }
+
+// 助手:论文发表员——本源达到设定阈值时自动完成研究
+// (本源里程碑"自动发表"解锁;自动触发时不弹确认框)
+if(isAssistantEnabled("paperPublisher")
+    && canOriginReset()
+    && publisherShouldReset()){
+    originReset(true);
+}
+
+// 助手:助手提拔员——自动升级四个自动实验助手
+// (本源里程碑"自动提升"解锁;直接改状态,界面由渲染层刷新)
+promoteExpAssistants();
 
 // 补帧步数计数(调用方据此做死循环兜底)
 catchupSteps++;
@@ -666,6 +766,10 @@ if(pendingDt <= 0)
     return;
 
 catchupSteps = 0;
+
+// 积压超过 COMPUTE_HINT_SECONDS → 亮出"计算中"
+if(pendingDt >= COMPUTE_HINT_SECONDS)
+    setComputing(true);
 
 // 补帧循环:把积压的时间切成 ≤ MAX_FRAME_DT 的小步依次结算。
 // 双重刹车:
@@ -707,6 +811,9 @@ while(pendingDt > 0){
         break;
 
 }
+
+// 没补完 → 提示继续亮着;补完了 → 延迟淡出
+setComputing(pendingDt > 0);
 
 
 // 渲染与剧情判定(每帧只跑一次,不参与补帧循环)
@@ -851,8 +958,56 @@ if(!game.theory6StorySeen
 }
 
 
+// 第一次完成研究后:解锁"你的理论"(本源页第二子页)
+if(originResets() >= 1 && !game.ownTheoryStorySeen){
+
+    game.ownTheoryStorySeen = true;
+
+    saveGame();
+
+    showOwnTheoryStory();
+
+    return;
+
+}
+
+
+// 本源里程碑"追寻答案"(完成 10 次研究):
+// 只要满足「结论」的三个条件就自动获得该升级(不消耗灵感)。
+// 这里每帧判定,挂机时也会自动获得。
+if(autoConclusionReady()){
+
+    game.conclusionUnlocked = true;
+
+    saveGame();
+
+    renderFrontierPage();
+
+    // 首次获得:播放本源层剧情
+    if(!game.conclusionStorySeen){
+
+        game.conclusionStorySeen = true;
+
+        saveGame();
+
+        showConclusionStory();
+
+        return;
+
+    }
+
+}
+
+
 // 更新研究 nav 按钮显示(已看过剧情才显示)
 updateResearchButton();
+
+// 更新本源 nav 按钮显示(论文"结论"完成后永久显示)
+updateOriginNavButton();
+
+// 记录历史最高研究阶段(本源里程碑"记忆印记"保留研究里程碑用)
+if(game.researchStage > (game.maxResearchStage || 0))
+    game.maxResearchStage = game.researchStage;
 
 
 renderTheories();
@@ -868,6 +1023,9 @@ updateAchievementsUI();
 
 // 研究页面数据(增量更新文本)
 renderResearchPage();
+
+// 本源页面数据(数值每帧刷新,里程碑结构变化才重建)
+renderOriginPage();
 
 // 展示面板(增量更新数值)
 renderStatsPage();

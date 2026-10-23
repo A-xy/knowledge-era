@@ -587,6 +587,14 @@ function knowledgeRawSpeed(){
         innovationBonus()
     );
 
+    // 本源层"你的理论":知识获取 ×Effect
+    // (未解锁时 Effect = 1,不影响前期数值)
+    // 注:灵感速率 = 知识速率,因此也会一起被放大
+    speed =
+    speed.mul(
+        ownTheoryEffect()
+    );
+
     return speed;
 }
 

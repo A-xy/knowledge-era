@@ -171,7 +171,7 @@ const FRONTIER_CONFIG = {
                     label: "其余各行均已完成"
                 }
             ],
-            desc: "解锁下一个层级(暂未实装)"
+            desc: "解锁本源层(里程碑 / 你的理论 / 本源升级)"
         },
         {
             key: "refLegacyTheory",
@@ -313,8 +313,26 @@ function rowOwnedPaper(row){
 }
 
 
+// 本源升级"多元论文"放行的升级:与同行的其它升级不再互斥
+// (第3行 实验导向 / 第4行 参考实验3 / 第6行 引用实验成果)
+const MULTI_PAPER_KEYS = [
+    "experimentOriented",
+    "refExp3",
+    "refExperiment"
+];
+
+
 // 某个升级是否因"同行已选其它升级"而被锁定
 // (自身已购买不算被锁定;同行无选中项也不算)
+//
+// 注意:开启"多元论文"后,同一行可能同时存在多个已购升级,
+// 所以这里必须检查**整行**的已购集合,不能用 rowOwnedPaper()
+// (那个只返回第一个,会漏判"同行还有一个非放行升级")。
+//
+// 规则:
+//   没有多元论文 → 同行只要已选一个就锁死
+//   有多元论文   → 自己要买的在放行列表里 → 直接放行;
+//                  否则看已购项,只要有一个不在放行列表里就仍然锁死
 function paperRowBlocked(p){
 
     if(!p)
@@ -323,7 +341,37 @@ function paperRowBlocked(p){
     if(paperOwned(p.key))
         return false;
 
-    return rowOwnedPaper(p.row || 1) !== null;
+    let list =
+    papersInRow(p.row || 1);
+
+    let owned = [];
+
+    for(let i = 0; i < list.length; i++){
+
+        if(paperOwned(list[i].key))
+            owned.push(list[i]);
+
+    }
+
+    if(owned.length === 0)
+        return false;
+
+    if(!originUpgradeActive("multiPaper"))
+        return true;
+
+    // 自己要买的属于"可共存"的三项 → 与同行任何升级都不冲突
+    if(MULTI_PAPER_KEYS.indexOf(p.key) >= 0)
+        return false;
+
+    // 否则:同行只要还有一个"不可共存"的升级,就仍然锁死
+    for(let i = 0; i < owned.length; i++){
+
+        if(MULTI_PAPER_KEYS.indexOf(owned[i].key) < 0)
+            return true;
+
+    }
+
+    return false;
 
 }
 
@@ -902,6 +950,17 @@ function buyPaper(key){
     saveGame();
 
     renderFrontierPage();
+
+    // 首次编写"结论":播放本源层剧情(此后本源页面永久显示)
+    if(key === "conclusion" && !game.conclusionStorySeen){
+
+        game.conclusionStorySeen = true;
+
+        saveGame();
+
+        showConclusionStory();
+
+    }
 
     return "ok";
 

@@ -137,6 +137,7 @@ runJs('js/theories.js');
 runJs('js/ideas.js');
 runJs('js/research.js');
 runJs('js/frontier.js');
+runJs('js/origin.js');
 runJs('js/experiment.js');
 runJs('js/save.js');
 runJs('js/achievements.js');
