@@ -6,6 +6,8 @@
 //   助手/实验 : 研究重置一次后
 //   阶段3追加内容 : 达到研究阶段3(助手/实验的补充说明)
 //   前沿领域 : 达到研究阶段4
+// ⚠ 解锁是"永久"的:登记在 game.permaUnlocks(见 game.js 的
+//   PERMA_UNLOCK_LIST),完成研究把研究阶段清零后这些说明不会消失。
 // 更新日志为静态内容,直接写在 index.html 中。
 // ============================================================
 
@@ -19,11 +21,14 @@ let lastAboutKey = "";
 
 function aboutKey(){
     return [
-        isAchievementUnlocked("idea12") ? 1 : 0,
-        game.researchResets >= 1 ? 1 : 0,
-        game.researchStage >= 3 ? 1 : 0,
+        permaUnlock("research") ? 1 : 0,
+        permaUnlock("reset1") ? 1 : 0,
+        permaUnlock("stage3") ? 1 : 0,
         // 研究阶段4:显示"前沿领域"主题
-        game.researchStage >= 4 ? 1 : 0,
+        permaUnlock("frontier") ? 1 : 0,
+        // 本源层:显示"本源"与"你的理论"主题
+        permaUnlock("origin") ? 1 : 0,
+        permaUnlock("ownTheory") ? 1 : 0,
         // 发现拓展理论(理论6)后,"理论共有几种"的文案要跟着变
         theoryKindCount()
     ].join(":");
@@ -77,7 +82,7 @@ const ABOUT_SECTIONS = [
     {
         id: "research",
         title: "研究",
-        visible: function(){ return isAchievementUnlocked("idea12"); },
+        visible: function(){ return permaUnlock("research"); },
         paras: [
             "达到12个想法后,你将可以进行研究重置。研究重置可以基于知识获取行动点,此外,如果重置时达到了一定的想法数,还能推进研究阶段。通过推进研究阶段可以完成相应的里程碑。"
         ]
@@ -85,19 +90,19 @@ const ABOUT_SECTIONS = [
     {
         id: "helpers",
         title: "助手",
-        visible: function(){ return game.researchResets >= 1; },
+        visible: function(){ return permaUnlock("reset1"); },
         paras: [
             "花费行动点可以招募助手,提供一些实用的自动化功能。"
         ],
         stage3Paras: [
             "自动实验助手还可以帮你自动完成实验,在实验达到最优化之前,自动实验助手的效率与你进行此实验的最优操作次数反比。",
-            "自动实验助手可以升级以提高效率,每次升级效率翻倍。等级达到10后,升级的价格增长会加快,即价格膨胀。"
+            "自动实验助手可以升级以提高效率,每次升级乘以升级底数(初始为2倍)。等级达到10后,升级的价格增长会加快,即价格膨胀。"
         ]
     },
     {
         id: "experiments",
         title: "实验",
-        visible: function(){ return game.researchResets >= 1; },
+        visible: function(){ return permaUnlock("reset1"); },
         paras: [
             "实验是一些交互性的问题,你可以通过消耗行动点来进行测量,提交答案或改进实验,基于提交的答案与预设的正确答案接近程度提供加成,达到最高的加成时即可完成实验。"
         ],
@@ -109,12 +114,35 @@ const ABOUT_SECTIONS = [
     {
         id: "frontier",
         title: "前沿领域",
-        visible: function(){ return game.researchStage >= 4; },
+        visible: function(){ return permaUnlock("frontier"); },
         paras: [
             "你可以随时进入和退出前沿领域,但这样做时将进行一次研究重置。",
             "在前沿领域中,你无法解锁理论2~5,但你能获得和知识等量的灵感。",
             "灵感可以用于论文升级,提供各种加成。",
             "同一行的论文升级只能获取一个。此外,一些升级会额外需要一些条件才能获取,达到需要的条件即可,不消耗相应资源。你也可以重置某一行的升级,这样会同样进行一次研究重置。"
+        ]
+    },
+    {
+        id: "origin",
+        title: "本源",
+        visible: function(){ return permaUnlock("origin"); },
+        paras: [
+            "本源是游戏的第三个重置层级。当你获得论文升级「结论」后,将可以完成研究并获得本源。",
+            "完成研究会重置研究层级的大部分内容,不过你也可以基于完成研究的次数获得里程碑。",
+            "本源的获取基于行动点和研究阶段。",
+            "本源可以用于购买本源升级,以提供各种加成。"
+        ]
+    },
+    {
+        id: "ownTheory",
+        title: "你的理论",
+        visible: function(){ return permaUnlock("ownTheory"); },
+        paras: [
+            "你的理论和其它理论一样具有理论力量,力量的产出受到未分配的定理的加成。",
+            "你的理论的效果由理论力量和公式决定。",
+            "定理可以分别通过达到一定的知识,累计行动点和累计本源来获取;定理可以用于购买升级以提升公式或理论力量的效果。",
+            "完成研究或购买定理升级后会重置你的理论力量。",
+            "你的理论力量不受其它对理论力量的加成影响。"
         ]
     }
 ];
@@ -134,7 +162,8 @@ function aboutParasHTML(paras){
 
 // 生成游戏介绍 HTML(折叠结构,默认收起)
 function buildAboutHTML(){
-    let showStage3 = game.researchStage >= 3;
+    // 阶段3的补充说明同样永久显示(研究阶段清零后不再隐藏)
+    let showStage3 = permaUnlock("stage3");
     let html = "";
     for(let i = 0; i < ABOUT_SECTIONS.length; i++){
         let s = ABOUT_SECTIONS[i];

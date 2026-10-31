@@ -265,6 +265,13 @@ function unlockTheory(id){
 
         t.unlocked=true;
 
+        // 成就"回归基础":记录本轮解锁过理论2~5
+        // (只记真正解锁的时刻;originReset 时清零、结算成就)
+        let num = Number(id.replace("theory", ""));
+
+        if(num >= 2 && num <= 5)
+            game.theory25ThisRun = true;
+
         //理论力量初始为1
         t.power =
         new Decimal(1);

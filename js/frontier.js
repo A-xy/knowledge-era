@@ -839,6 +839,12 @@ function knowledgeLimit(){
     )
     .mul(
         metaBoundaryBonus()
+    )
+    // 本源升级"知识扩充":×1e50^等级(未购买 ×1)
+    .mul(
+        typeof knowledgeExpandMult === "function"
+        ? knowledgeExpandMult()
+        : 1
     );
 
 }
@@ -989,7 +995,10 @@ function buyIntro(){
 //     想法数 ≥ 12 → 正常结算(获得行动点、可推进阶段)并计入统计
 //     想法数 < 12 → 只重置,不计入任何数据
 // 返回退还的灵感(Decimal),该行无升级时返回 0
-function resetPaperRow(row){
+// 清空某一行已购买的升级并退还灵感(不触发研究重置)
+// 返回退还的灵感(Decimal);该行没有已购升级时返回 0
+// (导入论文升级时先用它把所有可重置行清空,最后统一重置一次)
+function clearPaperRow(row){
 
     let list =
     papersInRow(row);
@@ -1022,6 +1031,19 @@ function resetPaperRow(row){
     game.inspiration =
     frontierInspiration().add(refund);
 
+    return refund;
+
+}
+
+
+function resetPaperRow(row){
+
+    let refund =
+    clearPaperRow(row);
+
+    if(refund.lte(0))
+        return new Decimal(0);
+
     saveGame();
 
     // 与研究重置一致(含前沿领域进出的计入规则)
@@ -1030,6 +1052,384 @@ function resetPaperRow(row){
     renderFrontierPage();
 
     return refund;
+
+}
+
+
+// ============================================================
+// 论文升级的导出 / 导入
+// 导出格式:{xy,xy,...}
+//   x = 第几行,y = 该行内的第几个升级(配置顺序,从 1 开始)
+//   例:{11,21,31,41,51} = 每行都选了第一个
+// 导入:先清空所有"可重置的行"(退还灵感),再按行顺序购买导入的升级,
+//       最后统一进行一次研究重置(与"重置本行"的代价一致)。
+// 只影响升级状态,不改存档格式。
+// ============================================================
+
+// 导入窗口的展开状态与输入内容
+// (面板重建时 textarea 的内容会丢,所以另存一份;也用于把输入框恢复原样)
+let paperImportOpen = false;
+let paperImportText = "";
+
+// 导入/导出的提示文本(面板重建后靠它恢复)
+let paperIoMessage = "";
+
+
+// 把提示写到按钮右侧
+function setPaperIoMessage(text){
+
+    paperIoMessage = text;
+
+    let el =
+    document.getElementById("paperIoMsg");
+
+    if(el)
+        el.innerText = text;
+
+}
+
+
+// 某个升级在其所在行内的列号(从 1 开始;找不到返回 0)
+function paperColumn(key){
+
+    let conf =
+    paperConfig(key);
+
+    if(!conf)
+        return 0;
+
+    let list =
+    papersInRow(conf.row || 1);
+
+    for(let i = 0; i < list.length; i++){
+
+        if(list[i].key === key)
+            return i + 1;
+
+    }
+
+    return 0;
+
+}
+
+
+// 当前已购买的论文升级 → "{11,21,31,41,51,61}"
+function paperExportCode(){
+
+    let parts = [];
+
+    let rows =
+    paperRows();
+
+    for(let i = 0; i < rows.length; i++){
+
+        let list =
+        papersInRow(rows[i]);
+
+        for(let j = 0; j < list.length; j++){
+
+            if(paperOwned(list[j].key))
+                parts.push("" + rows[i] + (j + 1));
+
+        }
+
+    }
+
+    return "{" + parts.join(",") + "}";
+
+}
+
+
+// 复制文本到剪贴板(clipboard API 不可用时回退到 textarea + execCommand)
+// 结果通过回调告知(true = 成功)
+function copyTextToClipboard(text, cb){
+
+    let fallback =
+    function(){
+
+        let ok = false;
+
+        try{
+
+            let ta =
+            document.createElement("textarea");
+
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            ta.style.opacity = "0";
+
+            document.body.appendChild(ta);
+            ta.select();
+
+            ok = document.execCommand("copy");
+
+            document.body.removeChild(ta);
+
+        }catch(e){
+            ok = false;
+        }
+
+        cb(ok);
+
+    };
+
+    if(typeof navigator !== "undefined"
+        && navigator.clipboard
+        && navigator.clipboard.writeText){
+
+        try{
+
+            navigator.clipboard.writeText(text).then(
+                function(){ cb(true); },
+                function(){ fallback(); }
+            );
+
+            return;
+
+        }catch(e){
+            // 落到回退方案
+        }
+
+    }
+
+    fallback();
+
+}
+
+
+// 页面按钮:导出到剪贴板
+function exportPapers(){
+
+    let code =
+    paperExportCode();
+
+    copyTextToClipboard(code, function(ok){
+
+        setPaperIoMessage(
+            ok
+            ? "已导出到剪贴板:" + code
+            : "复制失败,请手动复制:" + code
+        );
+
+    });
+
+}
+
+
+// 解析导入文本 → { keys: [...], bad: [...] }
+// 容忍空格/换行/大括号/中文逗号;每项必须是两位数字(行 + 列)
+function parsePaperCode(text){
+
+    let keys = [];
+    let bad = [];
+
+    let raw =
+    String(text || "")
+    .replace(/[{}｛｝]/g, "")
+    .replace(/，/g, ",");
+
+    let parts =
+    raw.split(",");
+
+    for(let i = 0; i < parts.length; i++){
+
+        let tok =
+        parts[i].replace(/\s/g, "");
+
+        if(tok === "")
+            continue;
+
+        if(!/^[0-9]{2}$/.test(tok)){
+            bad.push(tok);
+            continue;
+        }
+
+        let row =
+        Number(tok.charAt(0));
+
+        let col =
+        Number(tok.charAt(1));
+
+        let list =
+        papersInRow(row);
+
+        if(list.length === 0 || col < 1 || col > list.length){
+            bad.push(tok);
+            continue;
+        }
+
+        let key =
+        list[col - 1].key;
+
+        if(keys.indexOf(key) < 0)
+            keys.push(key);
+
+    }
+
+    return { keys: keys, bad: bad };
+
+}
+
+
+// 购买失败原因 → 提示文本
+function paperImportFailText(r){
+
+    if(r === "noinspiration")
+        return "灵感不足";
+
+    if(r === "require")
+        return "条件未达成";
+
+    if(r === "row")
+        return "本行已选其它升级";
+
+    if(r === "none")
+        return "配置中不存在";
+
+    return "无法购买";
+
+}
+
+
+// 页面按钮:打开 / 关闭导入窗口
+function togglePaperImport(){
+
+    paperImportOpen = !paperImportOpen;
+
+    // 第一次打开时,把当前的升级情况预填进去(方便照着改)
+    if(paperImportOpen && !paperImportText)
+        paperImportText = paperExportCode();
+
+    // 展开状态进了结构签名,重建会把窗口显示/隐藏掉
+    renderFrontierPage();
+
+}
+
+
+// 页面按钮:执行导入
+function importPapers(){
+
+    let input =
+    document.getElementById("paperImportInput");
+
+    let text =
+    input
+    ? input.value
+    : paperImportText;
+
+    let parsed =
+    parsePaperCode(text);
+
+    if(parsed.keys.length === 0 && parsed.bad.length === 0){
+
+        setPaperIoMessage("没有可导入的内容");
+        return;
+
+    }
+
+    // ---- 1. 清空所有可重置的行(退还灵感)----
+    let rows =
+    paperRows();
+
+    let refunded =
+    new Decimal(0);
+
+    for(let i = 0; i < rows.length; i++){
+
+        if(rowResettable(rows[i]))
+            refunded = refunded.add(clearPaperRow(rows[i]));
+
+    }
+
+    // ---- 2. 按"行优先"的顺序购买 ----
+    // (结论要求"其余各行均已完成",所以必须从前往后买)
+    parsed.keys.sort(function(a, b){
+
+        let ra = paperConfig(a).row || 1;
+        let rb = paperConfig(b).row || 1;
+
+        if(ra !== rb)
+            return ra - rb;
+
+        return paperColumn(a) - paperColumn(b);
+
+    });
+
+    // 购买两轮:第一轮失败的再试一次 —— 结论排在参考文献之前,
+    // 而结论要求"其余各行已完成",一轮买下来必然差最后一行。
+    let pending = [];
+    let done = 0;
+    let fail = [];
+
+    for(let i = 0; i < parsed.keys.length; i++)
+        pending.push({ key: parsed.keys[i], reason: "" });
+
+    for(let round = 0; round < 2 && pending.length > 0; round++){
+
+        let retry = [];
+
+        for(let i = 0; i < pending.length; i++){
+
+            let item =
+            pending[i];
+
+            let r =
+            buyPaper(item.key);
+
+            if(r === "ok" || r === "owned"){
+
+                done++;
+                continue;
+
+            }
+
+            if(round === 0)
+                retry.push({ key: item.key, reason: r });
+            else
+                fail.push({ key: item.key, reason: r });
+
+        }
+
+        pending = retry;
+
+    }
+
+    for(let i = 0; i < fail.length; i++){
+
+        let conf =
+        paperConfig(fail[i].key);
+
+        fail[i] =
+        (conf ? conf.name : fail[i].key) +
+        "(" + paperImportFailText(fail[i].reason) + ")";
+
+    }
+
+    // ---- 3. 有行被清空过 → 统一做一次研究重置 ----
+    if(refunded.gt(0)){
+
+        saveGame();
+
+        frontierReset();
+
+    }
+
+    // ---- 4. 结果提示 + 收起窗口 ----
+    let msg =
+    "已导入 " + done + " 项";
+
+    if(parsed.bad.length > 0)
+        msg += ";无法识别:" + parsed.bad.join(",");
+
+    if(fail.length > 0)
+        msg += ";失败:" + fail.join("、");
+
+    paperImportOpen = false;
+
+    setPaperIoMessage(msg);
+
+    renderFrontierPage();
 
 }
 
@@ -1225,6 +1625,32 @@ function buildFrontierHTML(){
     html +=
     '<h3>论文升级</h3>';
 
+    // 导出 / 导入(方便调整升级组合)
+    html +=
+    '<div class="paper-io">' +
+    '<button class="paper-io-btn" onclick="exportPapers()">导出</button>' +
+    '<button class="paper-io-btn" onclick="togglePaperImport()">导入</button>' +
+    '<span class="paper-io-msg" id="paperIoMsg"></span>' +
+    '</div>';
+
+    if(paperImportOpen){
+
+        html +=
+        '<div class="paper-import-box">' +
+        '<div class="paper-import-hint">' +
+        '格式:{xy,xy,...},x = 行,y = 该行的第几个升级(如 {11,21,31,41,51} = 每行都选第一个)。<br>' +
+        '导入会先重置所有可重置的行(退还灵感),再购买导入的升级,最后进行一次研究重置。' +
+        '</div>' +
+        '<textarea id="paperImportInput" rows="3" spellcheck="false"' +
+        ' oninput="paperImportText=this.value"></textarea>' +
+        '<div class="paper-import-actions">' +
+        '<button class="paper-io-btn primary" onclick="importPapers()">确认导入</button>' +
+        '<button class="paper-io-btn" onclick="togglePaperImport()">取消</button>' +
+        '</div>' +
+        '</div>';
+
+    }
+
     html +=
     '<p class="research-hint paper-hint">' +
     '同一行的升级只能获取一个。此外,一些升级会额外需要一些条件才能获取,' +
@@ -1286,7 +1712,9 @@ function renderFrontierPage(){
     // 注意:不能放入灵感、行动点、实验次数等实时数值,否则会每帧重建
     let keyParts = [
         frontierUnlocked() ? 1 : 0,
-        frontierActive() ? 1 : 0
+        frontierActive() ? 1 : 0,
+        // 导入窗口的展开状态(打开/关闭需要重建 DOM)
+        paperImportOpen ? 1 : 0
     ];
 
     for(let i = 0;
@@ -1314,6 +1742,24 @@ function renderFrontierPage(){
 
         if(panel.innerHTML !== html)
             panel.innerHTML = html;
+
+        // 重建后把导入窗口的输入内容与提示文本补回去
+        // (textarea 的值不能写进 HTML,否则会被当成标签解析)
+        let importInput =
+        panel.querySelector
+        ? panel.querySelector("#paperImportInput")
+        : null;
+
+        if(importInput)
+            importInput.value = paperImportText;
+
+        let ioMsg =
+        panel.querySelector
+        ? panel.querySelector("#paperIoMsg")
+        : null;
+
+        if(ioMsg)
+            ioMsg.innerText = paperIoMessage;
 
     }
 

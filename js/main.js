@@ -144,13 +144,18 @@ let lastTickTime = null;
 // 谁先来谁用 —— 主循环的补帧循环与页面加载时的离线碎片转化共用它,
 // 所以"开着窗口但被遮挡"和"完全关闭页面"的收益口径一致,
 // 不会出现两边都算一遍、或者两边都不算的时间黑洞。
-// (调试模式不限额度,与碎片消耗的处理保持一致)
+// ⚠ 调试模式也走同一本账。曾经在 DEBUG 下直接返回 Infinity,
+//   结果 spendOfflineQuota() 也跟着跳过 → lastTickTime 永不推进 →
+//   每帧都拿"从打开页面到现在"的全部时长去补帧,int(亿)级积压永远补不完:
+//   顶部"计算中"一直亮着,离线提示还会显示 "Infinity 小时 NaN 分钟"。
 function offlineQuota(){
-    if(DEBUG.enabled)
-        return Infinity;
     if(lastTickTime === null)
         return 0;
-    return Math.max(0, (Date.now() - lastTickTime) / 1000);
+    let v = (Date.now() - lastTickTime) / 1000;
+    // 时钟回拨/时间戳损坏时会算出负数或 NaN,一律当 0
+    if(!isFinite(v) || v <= 0)
+        return 0;
+    return v;
 }
 
 // 确保计时基准已初始化(无存档 / 存档缺 lastSave 时兜底)。
@@ -162,8 +167,9 @@ function ensureTickBase(){
 }
 
 // 从额度里扣掉 consumed 秒(推进计时基准)
+// ⚠ 调试模式同样必须推进:否则额度永远花不完(见 offlineQuota 的说明)
 function spendOfflineQuota(consumed){
-    if(DEBUG.enabled || lastTickTime === null)
+    if(lastTickTime === null || !isFinite(consumed))
         return;
     lastTickTime += consumed * 1000;
 }
@@ -185,7 +191,8 @@ let catchupSteps = 0;
 //   本来就该丢弃(与"碎片储量上限=最多存 N 小时"的设计一致)。
 function applyOfflineToShards(){
     let dtSec = offlineQuota();
-    if(dtSec < 5)
+    // 非有限值(时间戳损坏)→ 当没离线,免得把 Infinity 写进碎片/提示
+    if(!isFinite(dtSec) || dtSec < 5)
         return 0; // 间隔太短不算离线
     // 转化前先记录,用于提示里显示"实际溢出丢弃了多少"
     let before = game.timeShards || 0;
@@ -223,6 +230,12 @@ function renderTimePage(){
     let hint = document.getElementById("timeDebugHint");
     if(hint){
         hint.style.display =
+        DEBUG.enabled ? "block" : "none";
+    }
+    // 调试工具面板(获得本源 / 完成研究次数)同样只在调试模式显示
+    let dbgPanel = document.getElementById("timeDebugPanel");
+    if(dbgPanel){
+        dbgPanel.style.display =
         DEBUG.enabled ? "block" : "none";
     }
     // 结构签名:只放"会改变 DOM 结构"的东西(当前档位 / 储量上限 / 解锁档位)。
@@ -293,6 +306,91 @@ function refreshDebugInfo(){
     }else{
         info.style.display = "none";
     }
+}
+
+
+// ============================================================
+// 调试工具(仅 DEBUG.enabled 时显示在时间页)
+// 用来快速把本源 / 完成研究次数推到指定值,便于测试本源层内容。
+// ============================================================
+
+// 读取输入框数值(支持 1e5 这类科学计数法;非法返回 null)
+function debugReadValue(id){
+
+    let el =
+    document.getElementById(id);
+
+    if(!el || typeof parseSettingValue !== "function")
+        return null;
+
+    return parseSettingValue(el.value, 0);
+
+}
+
+
+// 获得指定数量的本源(同时计入"累计本源",方便测试依赖它的升级与定理)
+function debugGainOrigin(){
+
+    if(!DEBUG.enabled)
+        return;
+
+    let v =
+    debugReadValue("debugOriginInput");
+
+    if(!v || v.lte(0)){
+        alert("请输入大于 0 的本源数量");
+        return;
+    }
+
+    game.origin = origin().add(v);
+    game.totalOrigin = totalOrigin().add(v);
+
+    // 方便测试:直接解锁本源页面
+    if(!game.originUnlocked)
+        game.originUnlocked = true;
+
+    saveGame();
+    updateOriginNavButton();
+    renderOriginPage();
+
+}
+
+
+// 获得指定数量的"完成研究"次数(只增加计数,不执行重置)
+function debugGainOriginResets(){
+
+    if(!DEBUG.enabled)
+        return;
+
+    let v =
+    debugReadValue("debugResetsInput");
+
+    if(!v || v.lt(1)){
+        alert("请输入不小于 1 的次数");
+        return;
+    }
+
+    let n =
+    Math.floor(v.toNumber());
+
+    if(!(n > 0))
+        return;
+
+    game.originResets =
+    originResets() + n;
+
+    if(!game.originUnlocked)
+        game.originUnlocked = true;
+
+    // 没有起算时间时补种,避免"本次研究用时"算出一个巨大的值
+    if(game.lastOriginResetTime === null
+        || game.lastOriginResetTime === undefined)
+        game.lastOriginResetTime = game.totalTime || 0;
+
+    saveGame();
+    updateOriginNavButton();
+    renderOriginPage();
+
 }
 
 
@@ -441,6 +539,10 @@ refreshDebugInfo();
 
 // 格式化离线时长
 function formatOfflineTime(sec){
+
+    // 兜底:非有限/负数(存档时间戳异常)不让它显示成 "Infinity 小时 NaN 分钟"
+    if(!isFinite(sec) || sec < 0)
+        return "未知时长";
 
     sec = Math.floor(sec);
 
@@ -1011,6 +1113,9 @@ if(game.researchStage > (game.maxResearchStage || 0))
 
 
 renderTheories();
+
+// 永久解锁标记(统计 / 关于页的条目;本源重置后不再消失)
+updatePermaUnlocks();
 
 // 想法页面数据(增量更新文本)
 renderIdeaPage();

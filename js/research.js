@@ -30,11 +30,21 @@ const RESEARCH_CONFIG = {
     // 研究总结员触发条件的默认值(玩家可改;以字符串存储,支持"1e10"这类科学计数法)
     //   阈值模式:重置可获得 ≥ 该值 时自动重置
     //   倍数模式:重置可获得 ≥ 上次重置所得 × 该倍数 时自动重置
+    //   时间模式:本次研究的游戏时间达到该秒数时自动重置
     summarizerDefaultThreshold: "5",
     summarizerDefaultMultiplier: "2",
+    summarizerDefaultTime: "60",
     // 阶段需求公式:第 n(n≥4)个研究阶段需要 12 + 4n 想法
     stageFormulaBase: 12,
-    stageFormulaStep: 4
+    stageFormulaStep: 4,
+    // 里程碑"跨学科研究"的行动点底数:AP × 底数^(阶段-1)
+    // 本源升级「底数提升1」每级把底数 +apStageBaseStep
+    apStageBase: 2,
+    apStageBaseStep: 0.2,
+    // 自动实验助手的升级底数:效率 × 底数^等级
+    // 本源升级「底数提升2」每级把底数 +expAssistantBaseStep
+    expAssistantBase: 2,
+    expAssistantBaseStep: 0.2
 };
 
 
@@ -77,7 +87,7 @@ const RESEARCH_MILESTONES = [
         id: "stage2",
         stage: 2,
         name: "跨学科研究",
-        desc: "基于研究阶段提升行动点数获取 ×2^(阶段-1)"
+        desc: "基于研究阶段提升行动点数获取 ×底数^(阶段-1)(底数初始 2)"
     },
     {
         id: "stage3",
@@ -146,14 +156,57 @@ function actionPointsBase(){
 }
 
 
-// 研究里程碑 stage2(跨学科研究):行动点获取 ×2^(研究阶段-1)
+// 里程碑「跨学科研究」的行动点底数(初始 2)
+// 本源升级「底数提升1」每级 +0.2 → 2.2 / 2.4 / …
+function stageAPBase(){
+
+    let lv =
+    (typeof originUpgradeLevel === "function")
+    ? originUpgradeLevel("stageBaseBoost")
+    : 0;
+
+    return new Decimal(
+        RESEARCH_CONFIG.apStageBase
+        + RESEARCH_CONFIG.apStageBaseStep * lv
+    );
+
+}
+
+
+// 自动实验助手的升级底数(初始 2)
+// 本源升级「底数提升2」每级 +0.2 → 2.2 / 2.4 / …
+function expAssistantBase(){
+
+    let lv =
+    (typeof originUpgradeLevel === "function")
+    ? originUpgradeLevel("expBaseBoost")
+    : 0;
+
+    return RESEARCH_CONFIG.expAssistantBase
+    + RESEARCH_CONFIG.expAssistantBaseStep * lv;
+
+}
+
+
+// 研究里程碑 stage2(跨学科研究):行动点获取 ×底数^(研究阶段-1)
 // (未点亮返回 ×1)
+// ⚠ 指数下限为 0:里程碑"记忆印记"点亮后即使研究阶段被清零也算 active,
+//   此时 阶段-1 = -1 会把 AP 打成"除以底数"(底数 2 时直接砍半)。
+//   阶段 0 / 1 一律按 ×1 处理。
 function actionPointsStageMultiplier(){
 
     if(!isMilestoneActive("stage2"))
         return new Decimal(1);
 
-    return new Decimal(2).pow(game.researchStage - 1);
+    return stageAPBase().pow(actionPointsStageExp());
+
+}
+
+
+// 里程碑 stage2 的指数:max(研究阶段-1, 0)
+function actionPointsStageExp(){
+
+    return Math.max(0, (game.researchStage || 0) - 1);
 
 }
 
@@ -167,22 +220,24 @@ function actionPointsGain(){
     .mul(actionPointsStageMultiplier())
     // 效果6(引言·行动点加成):×(1+MetaPower)^0.1
     .mul(metaAPBonus())
-    // 本源层"你的理论":行动点获取 ×Effect(未解锁时 ×1)
-    .mul(ownTheoryEffect())
+    // 本源层"你的理论":行动点获取 ×Effect
+    // (只有买了「推广理论II」才生效,否则 ×1)
+    .mul(ownTheoryAPEffect())
     .floor();
 
 }
 
 
 // 行动点获取加成倍率(里程碑 stage2)
-// stage=2 时 ×2^(2-1)=×2;stage=3 时 ×4...;未激活返回 ×1
+// stage=2 时 ×底数^(2-1)=×2;stage=3 时 ×4…;未激活返回 ×1
+// (指数同样走 max(阶段-1, 0),见 actionPointsStageExp)
 function researchAPBonus(){
 
     if(!isMilestoneActive("stage2"))
         return new Decimal(1);
 
-    return new Decimal(2)
-    .pow(game.researchStage - 1);
+    return stageAPBase()
+    .pow(actionPointsStageExp());
 
 }
 
@@ -214,6 +269,24 @@ function isMilestoneActive(id){
 }
 
 
+// 本源升级"真·无尽阶梯"的重置次数倍率 = floor(√(累计本源+1))
+// 未购买时返回 1;本源极多时兜底避免 number 溢出
+function trueStaircaseMult(){
+
+    if(!originUpgradeActive("trueStaircase"))
+        return new Decimal(1);
+
+    let mult =
+    totalOrigin().add(1).sqrt().floor();
+
+    if(mult.gt(1e15))
+        mult = new Decimal(1e15);
+
+    return mult;
+
+}
+
+
 // 有效研究重置次数
 // 本源升级"真·无尽阶梯":重置次数 × floor(√(累计本源+1))
 // 注意倍率按**累计本源**(totalOrigin,不扣消耗)计算 → 只增不减,
@@ -226,14 +299,7 @@ function effectiveResearchResets(){
     if(!originUpgradeActive("trueStaircase"))
         return base;
 
-    let mult =
-    totalOrigin().add(1).sqrt().floor();
-
-    // 兜底:本源极多时避免 number 溢出
-    if(mult.gt(1e15))
-        mult = new Decimal(1e15);
-
-    return base * mult.toNumber();
+    return base * trueStaircaseMult().toNumber();
 
 }
 
@@ -318,6 +384,9 @@ function endlessStaircaseResets(){
 // advanceStage : 是否可能推进研究阶段
 // 返回本次获得的行动点
 function applyResearchResetCore(gainAP, advanceStage){
+
+    // 时间模式计时:任何研究重置(含前沿领域进出触发的那种)都算重新开始
+    game.lastResearchCycleTime = game.totalTime || 0;
 
     let gainedAP =
     gainAP
@@ -675,7 +744,9 @@ function milestoneDesc(m){
 
     if(m.id === "stage2"){
 
-        return "行动点数获取 ×2^(阶段-1) | 当前 ×" +
+        return "行动点数获取 ×" +
+        baseNumberText(stageAPBase()) +
+        "^(阶段-1) | 当前 ×" +
         format(researchAPBonus()) +
         " ； 解锁新助手与实验3/4";
     }
@@ -740,6 +811,8 @@ const EXP_AUTO_PRICE = {
 // threshold: 可选,该助手是否有阈值设置(研究总结员的重置AP阈值)
 // modeAchievement: 可选,达成该成就后解锁该助手的第二工作模式
 //                  (研究总结员:阈值模式 ↔ 倍数模式)
+// timeModeAchievement: 可选,达成该成就后解锁"时间模式"
+//                  (本次循环的游戏时间达到设定秒数时触发)
 // requires: 可选,需要先解锁的前置助手 key(自动实验助手链式解锁)
 // expKey: 可选,对应的实验 key(自动实验助手生产该实验完成次数)
 // optimalOps: 可选,对应实验的最优化操作次数(效率上限/已最优化标记)
@@ -766,7 +839,9 @@ const ASSISTANT_LIST = [
         threshold: true,
         // 达成该成就后解锁"倍数模式"(见 achievements.js 的"项目迭代")
         modeAchievement: "research10",
-        desc: "自动进行研究重置(可设置重置阈值)"
+        // 达成成就"DDL战士"后解锁"时间模式"
+        timeModeAchievement: "ddlWarrior",
+        desc: "自动进行研究重置(可设置阈值/倍数/时间)"
     },
     {
         key: "expAuto1",
@@ -823,9 +898,13 @@ const ASSISTANT_LIST = [
         price: new Decimal("1e90"),
         originMilestone: 20,
         threshold: true,
+        // 达成成就"DDL战士"后解锁"时间模式"(本次本源按秒计时)
+        timeModeAchievement: "ddlWarrior",
         thresholdUnit: "本源",
         thresholdAction: "自动完成研究",
-        desc: "自动完成研究(可设置本源阈值)"
+        // 时间模式的文案前缀(论文发表员按"本次本源"计时)
+        timeLabel: "本次本源",
+        desc: "自动完成研究(可设置本源阈值/时间)"
     }
 ];
 
@@ -966,18 +1045,38 @@ function assistantVisible(key){
 
 
 // ============================================================
-// 研究总结员的工作模式
-//   threshold 阈值模式(默认):重置可获得 ≥ X 行动点 时自动重置
+// 带触发条件的助手的"工作模式"
+//   threshold 阈值模式(默认):重置可获得 ≥ X 时自动重置/完成研究
 //   multiple  倍数模式:重置可获得 ≥ 上次重置所得 ×X 时自动重置
-//             达成成就"项目迭代"后解锁(见 summarizerModeUnlocked)
-// 两个设置值都以**字符串**存储(玩家输入,支持"1e10"这类科学计数法):
+//             达成成就"项目迭代"(research10)后解锁
+//   time      时间模式:本次循环的游戏时间达到 X 秒时自动重置/完成研究
+//             达成成就"DDL战士"(ddlWarrior)后解锁
+//             研究总结员按"本次研究"(距上次研究重置)计时,
+//             论文发表员按"本次本源"(距上次完成研究)计时
+// 阈值/倍数/时间三个设置值都以**字符串**存储(玩家输入,支持"1e10"这类科学计数法):
 // 既能表示超出 double 范围的大数,读档时也无需额外的还原步骤,
 // 使用时统一走 new Decimal()。
 // ============================================================
 const SUMMARIZER_MODE = {
     THRESHOLD: "threshold",
-    MULTIPLE: "multiple"
+    MULTIPLE: "multiple",
+    TIME: "time"
 };
+
+
+// 模式的中文名(模式切换按钮 / 提示行用)
+function assistantModeName(mode){
+
+    if(mode === SUMMARIZER_MODE.MULTIPLE)
+        return "倍数";
+
+    if(mode === SUMMARIZER_MODE.TIME)
+        return "时间";
+
+    return "阈值";
+
+}
+
 
 
 // 数值输入格式:整数/小数,可带 e 指数(如 1e10、1e+580、2.5e30)
@@ -994,44 +1093,78 @@ function summarizerConf(){
 }
 
 
-// 解锁"倍数模式"的成就 id(取配置;无配置返回 null)
-function summarizerModeAchievement(){
+// 该助手的某个模式是否已解锁
+//   阈值模式恒可用;倍数/时间模式各自绑一个成就(取助手配置)
+function assistantModeUnlocked(key, mode){
 
     let conf =
-    assistantConf("researchSummarizer");
+    assistantConf(key);
 
-    return (conf && conf.modeAchievement)
-    ? conf.modeAchievement
-    : null;
+    if(!conf)
+        return false;
 
-}
+    if(mode === SUMMARIZER_MODE.MULTIPLE)
+        return !!conf.modeAchievement
+        && isAchievementUnlocked(conf.modeAchievement);
 
+    if(mode === SUMMARIZER_MODE.TIME)
+        return !!conf.timeModeAchievement
+        && isAchievementUnlocked(conf.timeModeAchievement);
 
-// 倍数模式是否已解锁
-function summarizerModeUnlocked(){
-
-    let id =
-    summarizerModeAchievement();
-
-    return id ? isAchievementUnlocked(id) : false;
+    return mode === SUMMARIZER_MODE.THRESHOLD;
 
 }
 
 
-// 研究总结员当前生效的模式(倍数模式未解锁时按阈值模式工作)
-function summarizerMode(){
+// 该助手已解锁的模式列表(固定顺序:阈值 → 倍数 → 时间)
+// 长度 > 1 时才显示模式切换按钮
+function assistantModeList(key){
+
+    let list =
+    [SUMMARIZER_MODE.THRESHOLD];
+
+    if(assistantModeUnlocked(key, SUMMARIZER_MODE.MULTIPLE))
+        list.push(SUMMARIZER_MODE.MULTIPLE);
+
+    if(assistantModeUnlocked(key, SUMMARIZER_MODE.TIME))
+        list.push(SUMMARIZER_MODE.TIME);
+
+    return list;
+
+}
+
+
+// 该助手当前生效的模式(存了未解锁的模式时回落到阈值模式)
+function assistantMode(key){
 
     let a =
-    summarizerConf();
+    game.assistants
+    ? game.assistants[key]
+    : null;
 
-    if(!a)
+    if(!a || !a.mode)
         return SUMMARIZER_MODE.THRESHOLD;
 
-    if(a.mode === SUMMARIZER_MODE.MULTIPLE
-        && summarizerModeUnlocked())
-        return SUMMARIZER_MODE.MULTIPLE;
+    return assistantModeUnlocked(key, a.mode)
+    ? a.mode
+    : SUMMARIZER_MODE.THRESHOLD;
 
-    return SUMMARIZER_MODE.THRESHOLD;
+}
+
+
+// 研究总结员的倍数模式是否已解锁
+function summarizerModeUnlocked(){
+
+    return assistantModeUnlocked(
+        "researchSummarizer", SUMMARIZER_MODE.MULTIPLE);
+
+}
+
+
+// 研究总结员当前生效的模式
+function summarizerMode(){
+
+    return assistantMode("researchSummarizer");
 
 }
 
@@ -1097,6 +1230,57 @@ function summarizerMultiplier(){
 }
 
 
+// 时间模式的默认秒数(按助手取配置;论文发表员在 ORIGIN_CONFIG 里)
+function assistantDefaultTime(key){
+
+    if(key === "paperPublisher")
+        return ORIGIN_CONFIG.publisherDefaultTime;
+
+    return RESEARCH_CONFIG.summarizerDefaultTime;
+
+}
+
+
+// 时间模式:本次研究的游戏时间达到该秒数时自动重置
+function summarizerTime(){
+
+    let a =
+    summarizerConf();
+
+    let v =
+    a
+    ? parseSettingValue(a.time, 1)
+    : null;
+
+    return v
+    ? v
+    : new Decimal(assistantDefaultTime("researchSummarizer"));
+
+}
+
+
+// 距离上一次研究重置的游戏时间(秒)= "本次研究"已进行的时长
+// lastResearchCycleTime 由 applyResearchResetCore 写入(任何研究重置都算);
+// 旧存档没有该字段 → 回落到 lastResearchResetTime
+function researchCycleElapsed(){
+
+    let t =
+    game.totalTime || 0;
+
+    let base =
+    game.lastResearchCycleTime;
+
+    if(base === null || base === undefined)
+        base = game.lastResearchResetTime;
+
+    if(base === null || base === undefined)
+        return t;
+
+    return Math.max(0, t - base);
+
+}
+
+
 // 本次自动重置所需达到的行动点
 //   阈值模式 → 阈值;倍数模式 → 上次重置所得 × 倍数
 // 倍数模式下若还没有"上次重置所得"记录 → 返回 null(此时不自动重置)
@@ -1128,6 +1312,11 @@ function summarizerTargetAP(){
 // 研究总结员此刻是否应触发研究重置
 function summarizerShouldReset(){
 
+    // 时间模式:本次研究的游戏时间达标即重置
+    if(summarizerMode() === SUMMARIZER_MODE.TIME)
+        return researchCycleElapsed()
+            >= summarizerTime().toNumber();
+
     let target =
     summarizerTargetAP();
 
@@ -1139,14 +1328,30 @@ function summarizerShouldReset(){
 }
 
 
+// 论文发表员的设置对象
+function publisherConf(){
+
+    return game.assistants
+    ? game.assistants.paperPublisher
+    : null;
+
+}
+
+
+// 论文发表员当前生效的模式(阈值 ↔ 时间)
+function publisherMode(){
+
+    return assistantMode("paperPublisher");
+
+}
+
+
 // 论文发表员:本源阈值(完成研究可获得 ≥ 该本源时自动完成研究)
 // 与研究总结员一样,设置值以字符串存储,支持科学计数法
 function publisherThreshold(){
 
     let a =
-    game.assistants
-    ? game.assistants.paperPublisher
-    : null;
+    publisherConf();
 
     let v =
     a
@@ -1160,8 +1365,48 @@ function publisherThreshold(){
 }
 
 
+// 论文发表员·时间模式:本次本源的游戏时间达到该秒数时自动完成研究
+function publisherTime(){
+
+    let a =
+    publisherConf();
+
+    let v =
+    a
+    ? parseSettingValue(a.time, 1)
+    : null;
+
+    return v
+    ? v
+    : new Decimal(assistantDefaultTime("paperPublisher"));
+
+}
+
+
+// 距离上一次完成研究的游戏时间(秒)= "本次本源"已进行的时长
+function originCycleElapsed(){
+
+    let t =
+    game.totalTime || 0;
+
+    let base =
+    game.lastOriginResetTime;
+
+    if(base === null || base === undefined)
+        return t;
+
+    return Math.max(0, t - base);
+
+}
+
+
 // 论文发表员此刻是否应触发完成研究
 function publisherShouldReset(){
+
+    // 时间模式:本次本源的游戏时间达标即完成研究
+    if(publisherMode() === SUMMARIZER_MODE.TIME)
+        return originCycleElapsed()
+            >= publisherTime().toNumber();
 
     return originGain().gte(
         publisherThreshold()
@@ -1180,7 +1425,9 @@ function setSummarizerSetting(key, field, val){
     if(!a)
         return;
 
-    if(field !== "threshold" && field !== "multiplier")
+    if(field !== "threshold"
+        && field !== "multiplier"
+        && field !== "time")
         return;
 
     if(parseSettingValue(val, 1) === null){
@@ -1209,19 +1456,30 @@ function setSummarizerSetting(key, field, val){
 }
 
 
-// 切换研究总结员的工作模式(阈值 ↔ 倍数;倍数模式未解锁时不动作)
-function toggleSummarizerMode(key){
+// 循环切换助手的工作模式(按已解锁的模式列表轮转;
+// 只解锁了阈值模式时不做任何事)
+function cycleAssistantMode(key){
 
     let a =
     game.assistants[key];
 
-    if(!a || !summarizerModeUnlocked())
+    if(!a)
         return;
 
+    let list =
+    assistantModeList(key);
+
+    if(list.length < 2)
+        return;
+
+    let cur =
+    assistantMode(key);
+
+    let idx =
+    list.indexOf(cur);
+
     a.mode =
-    summarizerMode() === SUMMARIZER_MODE.MULTIPLE
-    ? SUMMARIZER_MODE.THRESHOLD
-    : SUMMARIZER_MODE.MULTIPLE;
+    list[(idx + 1) % list.length];
 
     saveGame();
 
@@ -1257,6 +1515,10 @@ function ensureSummarizerCompat(){
     if(a.multiplier === undefined)
         a.multiplier =
         RESEARCH_CONFIG.summarizerDefaultMultiplier;
+
+    if(a.time === undefined)
+        a.time =
+        RESEARCH_CONFIG.summarizerDefaultTime;
 
     if(a.mode === undefined)
         a.mode = SUMMARIZER_MODE.THRESHOLD;
@@ -1326,7 +1588,7 @@ function expAutoBaseRate(key){
 }
 
 
-// 当前速率 = 基础速率 × 2^等级 × 元-力量效果5(引言·实验助手加成)
+// 当前速率 = 基础速率 × 升级底数^等级 × 元-力量效果5(引言·实验助手加成)
 //                                 × 论文升级"实验导向"加成
 //                                 × 里程碑"无尽阶梯"(阶段9)
 // (未启用返回 0)
@@ -1347,8 +1609,9 @@ function expAutoRate(key){
     // 效果5:所有实验助手的速度 ×(1+MetaPower)^0.05
     // 论文升级"实验导向":×(1+实验完成次数总和)^0.2
     // 里程碑"无尽阶梯":×(1+研究重置次数/30,最大300次)
+    // 升级底数:默认 2(每级 ×2),本源升级「底数提升2」可提高
     return expAutoBaseRate(key)
-    * Math.pow(2, a.level || 0)
+    * Math.pow(expAssistantBase(), a.level || 0)
     * metaExpAssistantBonus().toNumber()
     * experimentOrientedBonus().toNumber()
     * endlessStaircaseBonus().toNumber();
@@ -1758,8 +2021,8 @@ function refreshHelperRates(box){
 
         }
 
-        // 研究总结员:刷新倍数模式的"目标 AP"(= 上次重置所得 × 倍数)
-        // 该值随研究重置变化,故走轻量刷新而非重建卡片(重建会打断输入)
+        // 触发条件行的实时数值(倍数模式:目标 AP;时间模式:已过秒数)
+        // 该值随重置变化,故走轻量刷新而非重建卡片(重建会打断输入)
         if(conf.threshold){
 
             let targetEl =
@@ -1768,7 +2031,7 @@ function refreshHelperRates(box){
             : null;
 
             if(targetEl)
-                targetEl.textContent = summarizerTargetText();
+                targetEl.textContent = assistantTargetText(key);
 
         }
 
@@ -1788,6 +2051,37 @@ function summarizerTargetText(){
         return "暂无上次重置记录";
 
     return format(target);
+
+}
+
+
+// 触发条件行的实时数值文本
+//   倍数模式 → 目标 AP(= 上次重置所得 × 倍数)
+//   时间模式 → 本次循环(研究 / 本源)已进行的游戏时间(秒)
+//   阈值模式 → 没有实时值,返回空串
+function assistantTargetText(key){
+
+    let mode =
+    assistantMode(key);
+
+    if(mode === SUMMARIZER_MODE.TIME){
+
+        let sec =
+        (key === "paperPublisher")
+        ? originCycleElapsed()
+        : researchCycleElapsed();
+
+        // 整秒以下的部分抹掉,避免每帧跳数字
+        return String(
+            Math.floor(sec * 10) / 10
+        );
+
+    }
+
+    if(mode === SUMMARIZER_MODE.MULTIPLE)
+        return summarizerTargetText();
+
+    return "";
 
 }
 
@@ -1818,12 +2112,13 @@ function renderResearchHelpers(){
 
         let a = game.assistants[key];
 
-        // 模式/倍数解锁状态会影响卡片结构(模式按钮是否出现)→ 纳入签名
-        // ⚠ 阈值/倍数/等级**不进签名**:它们只影响卡片里的文本值,
+        // 模式解锁状态会影响卡片结构(模式按钮是否出现)→ 纳入签名
+        // (用"已解锁模式列表"表示:成就刚达成 / 模式刚切换时结构才变)
+        // ⚠ 阈值/倍数/时间/等级**不进签名**:它们只影响卡片里的文本值,
         //   放进签名会让整张列表在"助手提拔员每 tick 升级"或"玩家刚改完设置"时重建,
         //   正在输入的阈值输入框会被替换 → 输入被吞(论文发表员/研究总结员都中招)。
         //   这些值改由 syncHelperInputs() 轻量刷新。
-        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.mode || "") + ":" + (key === "researchSummarizer" && summarizerModeUnlocked() ? 1 : 0) + ";";
+        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.mode || "") + ":" + assistantModeList(key).join(",") + ";";
     }
 
     // 结构没变 → 不重建卡片,只刷新"效率"数值文本
@@ -1914,62 +2209,64 @@ function renderResearchHelpers(){
                 (a.enabled ? "开" : "关") +
                 "</button>";
 
-                // 触发条件设置(研究总结员:阈值模式 / 倍数模式)
+                // 触发条件设置(阈值 / 倍数 / 时间,按已解锁的模式显示)
                 if(conf.threshold){
 
-                    // 模式切换按钮(倍数模式解锁后才出现)
-                    if(conf.modeAchievement
-                        && summarizerModeUnlocked()){
+                    let modes =
+                    assistantModeList(conf.key);
 
-                        let isMultiple =
-                        summarizerMode() === SUMMARIZER_MODE.MULTIPLE;
+                    let mode =
+                    assistantMode(conf.key);
+
+                    // 阈值单位/动作按助手配置决定
+                    // (研究总结员:AP / 研究重置;论文发表员:本源 / 完成研究)
+                    let unit =
+                    conf.thresholdUnit || "AP";
+
+                    let action =
+                    conf.thresholdAction || "自动重置";
+
+                    // 模式切换按钮(解锁第二种模式后才出现)
+                    if(modes.length > 1){
 
                         html +=
                         "<button class=\"assistant-btn mode\" data-key=\"" + conf.key + "\">" +
-                        "模式:" + (isMultiple ? "倍数" : "阈值") +
+                        "模式:" + assistantModeName(mode) +
                         "</button>";
 
-                        if(isMultiple){
+                    }
 
-                            html +=
-                            "<div class=\"assistant-threshold\">" +
-                            "重置可获得的 AP 达到上次重置获得 AP 的 " +
-                            "<input class=\"assistant-input\" data-field=\"multiplier\" type=\"text\" inputmode=\"decimal\" " +
-                            "value=\"" + a.multiplier +
-                            "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'multiplier', this.value)\">" +
-                            " 倍时自动重置(即 <span class=\"assistant-target\" data-summarizer-target" +
-                            "=\"" + conf.key + "\"></span> AP)" +
-                            "</div>";
+                    if(mode === SUMMARIZER_MODE.MULTIPLE){
 
-                        }else{
+                        html +=
+                        "<div class=\"assistant-threshold\">" +
+                        "重置可获得的 AP 达到上次重置获得 AP 的 " +
+                        "<input class=\"assistant-input\" data-field=\"multiplier\" type=\"text\" inputmode=\"decimal\" " +
+                        "value=\"" + a.multiplier +
+                        "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'multiplier', this.value)\">" +
+                        " 倍时自动重置(即 <span class=\"assistant-target\"></span> AP)" +
+                        "</div>";
 
-                            // 阈值单位/动作按助手配置决定
-                            // (研究总结员:AP / 研究重置;论文发表员:本源 / 完成研究)
-                            let unit =
-                            conf.thresholdUnit || "AP";
+                    }else if(mode === SUMMARIZER_MODE.TIME){
 
-                            let action =
-                            conf.thresholdAction || "自动重置";
+                        // 时间模式:本次循环(研究/本源)已进行的游戏时间达到设定秒数
+                        // (存档里没这个字段时先显示默认值,避免输入框出现 undefined)
+                        let timeVal =
+                        (a.time === undefined || a.time === null)
+                        ? assistantDefaultTime(conf.key)
+                        : a.time;
 
-                            html +=
-                            "<div class=\"assistant-threshold\">" +
-                            "重置可获得 " +
-                            "<input class=\"assistant-input\" data-field=\"threshold\" type=\"text\" inputmode=\"decimal\" " +
-                            "value=\"" + a.threshold +
-                            "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'threshold', this.value)\">" +
-                            " " + unit + " 时" + action +
-                            "</div>";
-
-                        }
+                        html +=
+                        "<div class=\"assistant-threshold\">" +
+                        (conf.timeLabel || "本次研究") + "的游戏时间达到 " +
+                        "<input class=\"assistant-input\" data-field=\"time\" type=\"text\" inputmode=\"decimal\" " +
+                        "value=\"" + timeVal +
+                        "\" onchange=\"setSummarizerSetting('" + conf.key + "', 'time', this.value)\">" +
+                        " 秒时" + action +
+                        "(当前 <span class=\"assistant-target\"></span> 秒)" +
+                        "</div>";
 
                     }else{
-
-                        // 没有模式切换的助手(如论文发表员)同样按配置显示单位/动作
-                        let unit =
-                        conf.thresholdUnit || "AP";
-
-                        let action =
-                        conf.thresholdAction || "自动重置";
 
                         html +=
                         "<div class=\"assistant-threshold\">" +
@@ -2054,9 +2351,9 @@ function renderResearchHelpers(){
                 if(!isBtn)
                     return;
 
-                // 模式切换按钮(研究总结员:阈值 ↔ 倍数)
+                // 模式切换按钮(阈值 → 倍数 → 时间 轮转)
                 if(cls.contains("mode")){
-                    toggleSummarizerMode(key);
+                    cycleAssistantMode(key);
                     return;
                 }
 

@@ -20,6 +20,7 @@
 //   cap12h    时间碎片储量上限 → 12 小时
 //   buyMax    全部最大按钮永久解锁(不被想法重置影响)
 //   summarizerMode 解锁研究总结员的"倍数模式"(阈值 ↔ 倍数可切换)
+//   timeMode  解锁研究总结员与论文发表员的"时间"模式(按游戏时间触发)
 //   record    纯记录型(解锁内容由已有机制自动提供,仅登记)
 //   keepIdeas 获得想法时不再重置知识/理论(本源层成就「新起点」)
 //   batchIdea 允许一次获取多个想法(成就「想法宇宙」)
@@ -397,6 +398,59 @@ const ACHIEVEMENT_LIST = [
             }
             return originResets() >= maxN;
         }
+    },
+    // ---- 第九行 ----
+    {
+        // 本轮用时 = 上一次完成研究的用时(game.lastOriginRunTime)
+        id: "ddlWarrior",
+        name: "DDL战士",
+        condDesc: "在游戏时间 " + ORIGIN_CONFIG.fastOriginWindow + " 秒内完成研究",
+        rewardDesc: "解锁研究总结员与论文发表员的「时间」模式",
+        unlock: "timeMode",
+        check: function(){
+            let t = game.lastOriginRunTime;
+            return t !== null && t !== undefined
+                && t <= ORIGIN_CONFIG.fastOriginWindow;
+        }
+    },
+    {
+        id: "manyOrigins",
+        name: "成果斐然",
+        condDesc: "完成研究 " + ORIGIN_CONFIG.manyOriginTimes + " 次",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){
+            return originResets() >= ORIGIN_CONFIG.manyOriginTimes;
+        }
+    },
+    {
+        // 这里的"研究重置次数"是计入加成后的值(与里程碑/助手一致),
+        // 只有统计页显示的是不含加成的原始次数
+        id: "countless",
+        name: "不计其数",
+        condDesc: "达到 1e8 次研究重置次数(计入加成)",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){
+            return effectiveResearchResets() >= 1e8;
+        }
+    },
+    {
+        // 标记由 originReset() 结算:本轮没有解锁过理论2~5就完成研究
+        id: "backToBasics",
+        name: "回归基础",
+        condDesc: "在本次重置中未解锁过理论2~5的情况下完成研究",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){ return !!game.basicOnlyOriginDone; }
+    },
+    {
+        id: "answer42",
+        name: "宇宙的答案",
+        condDesc: "拥有 42 个定理",
+        rewardDesc: "240 时间碎片",
+        shards: 240,
+        check: function(){ return theoremTotal() >= 42; }
     }
 ];
 
@@ -410,6 +464,30 @@ function ensureAchievementCompat(){
     // 成就"意义何在":某实验完成次数达 1e10 后手动完成过一次
     if(game.manualExpAfterE10 === undefined)
         game.manualExpAfterE10 = false;
+
+    // 成就"回归基础":本轮(两次完成研究之间)是否解锁过理论2~5
+    // 老存档没有该字段 → 按当前是否已解锁理论2~5 推断,避免读档后就白送成就
+    if(game.theory25ThisRun === undefined){
+
+        game.theory25ThisRun = false;
+
+        for(let i = 2; i <= 5; i++){
+
+            let t =
+            game.theories
+            ? game.theories["theory" + i]
+            : null;
+
+            if(t && t.unlocked)
+                game.theory25ThisRun = true;
+
+        }
+
+    }
+
+    // 成就"回归基础"的达成标记(由 originReset() 写入)
+    if(game.basicOnlyOriginDone === undefined)
+        game.basicOnlyOriginDone = false;
 
 }
 

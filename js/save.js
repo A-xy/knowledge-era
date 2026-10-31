@@ -139,13 +139,12 @@ async function importSave(){
 
         game = obj;
 
-        // 主循环计时基准:与 loadGame 同理,从导入的存档恢复计时起点
-        if(typeof lastTickTime !== "undefined"){
-            lastTickTime =
-            (game.lastSave && game.lastSave > 0)
-                ? game.lastSave
-                : null;
-        }
+        // 主循环计时基准:导入的存档马上会被 saveGame() 写回并 reload,
+        // 这段时间的游戏进度**不该**按"离线"补算 —— 用当前时间做基准,
+        // 否则会用存档里的 lastSave(可能是好几天前)去补帧,
+        // 表现为导入后一直在"计算中"、还把过期时长算进进度。
+        if(typeof lastTickTime !== "undefined")
+            lastTickTime = Date.now();
 
         game.knowledge =
         new Decimal(
@@ -201,6 +200,8 @@ async function importSave(){
             game.totalTime = 0;
         if(game.lastResearchResetTime === undefined)
             game.lastResearchResetTime = null;
+        if(game.lastResearchCycleTime === undefined)
+            game.lastResearchCycleTime = null;
         if(game.fastResearchFlag === undefined)
             game.fastResearchFlag = false;
 
@@ -431,6 +432,8 @@ function loadGame(){
         game.totalTime = 0;
     if(game.lastResearchResetTime === undefined)
         game.lastResearchResetTime = null;
+    if(game.lastResearchCycleTime === undefined)
+        game.lastResearchCycleTime = null;
     if(game.fastResearchFlag === undefined)
         game.fastResearchFlag = false;
 

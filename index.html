@@ -446,6 +446,10 @@
 </p>
 
 <p class="research-hint">
+上次完成研究用时 <span id="originPrevElapsed">—</span>，获得本源效率为 <span id="originPrevRate">—</span>/分钟（共 <span id="originPrevGain">—</span> 本源）
+</p>
+
+<p class="research-hint">
 完成研究将重置：行动点、研究阶段、助手的解锁与等级、灵感、论文升级、实验重复完成次数、研究里程碑，以及理论与想法。<br>
 不会重置：实验的首次完成效果、实验的最优操作数、实验设备升级、研究重置次数、已解锁的成就内容，以及本源本身。
 </p>
@@ -466,7 +470,9 @@
 
 <p>你的理论具有理论力量 p = <span id="ownTheoryPower">1.00</span>（+<span id="ownTheoryRate">0.10</span>/秒）</p>
 
-<p>因此，基于公式 Effect = <span id="ownTheoryFormula">p</span>，使得知识、元-力量与行动点获取乘以 Effect = <span id="ownTheoryEffect">1.00</span>。</p>
+<p>因此，基于公式 Effect = <span id="ownTheoryFormula">p</span>，使得<span id="ownTheoryTargets">知识产出</span>乘以 Effect = <span id="ownTheoryEffect">1.00</span>。</p>
+
+<p id="ownTheoryTimeRow" style="display:none">时光之力·<span id="ownTheoryTimeName">迅速</span>：T(t) = <span id="ownTheoryTimeFormula">min(1000, 90000/t)</span> = <span id="ownTheoryTimeValue">1.00</span>（t = <span id="ownTheoryElapsed">0</span> 秒，距上次完成研究）</p>
 
 <p>你有 <span id="ownTheoremTotal">0</span> 个定理。</p>
 
@@ -487,6 +493,11 @@
 </div>
 
 <h3>定理升级</h3>
+
+<p class="research-hint">
+购买定理升级会消耗定理，并把理论力量 p 重置为 1（需要重新积攒）。<br>
+「推广理论I / II」让 Effect 也作用于元-力量与行动点；「公式增强」系列逐级提高公式；两种「时光之力」互斥，只能选择其中一个。
+</p>
 
 <div id="theoremUpgrades"></div>
 
@@ -526,6 +537,22 @@
 </p>
 
 <div id="timePanel" data-page-node-id="RHVPWtFh3oM7wD5Bs4JoqF">
+</div>
+
+<div id="timeDebugPanel" style="display:none">
+
+<h3>调试工具</h3>
+
+<div class="time-debug-row">
+<input id="debugOriginInput" class="debug-input" type="text" value="1e5" inputmode="decimal">
+<button class="time-btn" onclick="debugGainOrigin()">获得本源</button>
+</div>
+
+<div class="time-debug-row">
+<input id="debugResetsInput" class="debug-input" type="text" value="10" inputmode="decimal">
+<button class="time-btn" onclick="debugGainOriginResets()">获得完成研究次数</button>
+</div>
+
 </div>
 
 </div>
@@ -632,6 +659,17 @@
 </div>
 
 <div id="aboutChangelogPage" style="display:none">
+
+<div class="changelog-entry">
+<h3>V1.0 追寻本源 <span class="changelog-date">2026/10/31</span></h3>
+<ul>
+<li>调整了你的理论,并增加了7个定理升级</li>
+<li>增加了4个本源升级</li>
+<li>增加了5个成就</li>
+<li>给自动重置助手增加了新模式</li>
+<li>补充了游戏介绍和统计中关于本源的内容</li>
+</ul>
+</div>
 
 <div class="changelog-entry">
 <h3>V1.0beta 追寻本源-先行版 <span class="changelog-date">2026/10/23</span></h3>

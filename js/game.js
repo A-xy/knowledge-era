@@ -93,20 +93,27 @@ originUnlocked:false,
 maxResearchStage:0,
 conclusionStorySeen:false,
 
-// 完成研究的统计(用时与本源速率都是实时算的,不留历史快照)
+// 完成研究的统计(本轮用时与本源速率都是实时算的,不留历史快照)
 // lastOriginResetTime: 本轮研究开始的游戏时间(秒;本源未解锁时为 null)
+// lastOriginRunTime  : 上一次完成研究用的秒数(null = 还没完成过)
+// lastOriginRunGain  : 上一次完成研究实际获得的本源
+//                      (效率 = gain × 60 / 用时,显示时再算)
 lastOriginResetTime:null,
+lastOriginRunTime:null,
+lastOriginRunGain:null,
 
 // 你的理论(本源层第二子页;第一次完成研究后解锁)
 // ownTheory         : 理论力量 p(刚解锁与每次完成研究时重置为 1)
 // theorems          : 三种途径各自已获得的定理数(只增不减)
 //                     { knowledge, ap, origin }
-// theoremUpgrades   : 消耗定理的升级状态 { powerSquared: true }
+// theoremUpgrades   : 消耗定理的升级状态 { propagateI: true, ... }
+// theoremUpgradeVersion: 升级表版本(2 = 2026-10-31 改版;旧存档读入时自动重置一次)
 // totalOrigin       : 累计获得的本源(不扣消耗,供定理门槛判断)
 // ownTheoryStorySeen: 首次完成研究后的剧情已看过
 ownTheory:new Decimal(1),
 theorems:{ knowledge:0, ap:0, origin:0 },
 theoremUpgrades:{},
+theoremUpgradeVersion:2,
 totalOrigin:new Decimal(0),
 ownTheoryStorySeen:false,
 
@@ -120,13 +127,22 @@ originUpgrades:{},
 achievements:{},
 
 // 高速研究计时(游戏总时间/上次研究重置时间/满足10秒标记)
+// lastResearchCycleTime: 最近一次研究重置的游戏时间(任何重置都记;
+//                        研究总结员"时间模式"的计时起点)
 totalTime:0,
 lastResearchResetTime:null,
+lastResearchCycleTime:null,
 fastResearchFlag:false,
 
 // 成就"意义何在":某个实验的完成次数达到阈值后,又手动完成过一次
 // (由 experiment.js 的 expOnComplete() 置位;自动实验助手不计入)
 manualExpAfterE10:false,
+
+// 成就"回归基础":本轮(两次完成研究之间)是否解锁过理论2~5
+// theory25ThisRun      : 本轮解锁过 → true(unlockTheory 置位,originReset 清零)
+// basicOnlyOriginDone  : 曾在本轮没解锁理论2~5的情况下完成研究
+theory25ThisRun:false,
+basicOnlyOriginDone:false,
 
 // 生涯统计(游戏统计页;累计值不清零,供跨重置展示)
 // totalKnowledgeProduced:累计生产的知识总量
@@ -141,6 +157,10 @@ totalResearchPoints:new Decimal(0),
 // 上次研究重置实际获得的行动点(研究总结员·倍数模式的判断依据;null=尚无记录)
 lastResearchAPGain:null,
 fastestResearchReset:null,
+
+// 永久解锁标记:统计页 / 关于页的条目一旦解锁就永久显示
+// (本源重置会清空想法与研究阶段,这些条目不应跟着消失;规则见 PERMA_UNLOCK_LIST)
+permaUnlocks:{},
 
 // 助手系统(消耗行动点解锁,解锁后可用开关控制)
 // theorist: 理论研究员——自动解锁和升级理论
@@ -260,3 +280,113 @@ power:new Decimal(1)
 
 
 };
+
+
+// ============================================================
+// 永久解锁标记(统计页 / 关于页的条目可见性)
+// 这些条目原本按"当前进度"判断,但完成研究会把想法、研究阶段清零,
+// 已经解锁过的说明与统计条目就会再次消失。改为:条件一旦满足就记下来。
+// maxResearchStage(历史最高阶段)与各种 storySeen 标记同样不随重置清空,
+// 所以老存档即使正处于"已重置到阶段0"的状态,也能正确认回这些条目。
+// ============================================================
+const PERMA_UNLOCK_LIST = [
+
+    {
+        key: "idea",
+        test: function(){
+            return game.totalIdeas > 0 || game.ideaStorySeen;
+        }
+    },
+
+    {
+        key: "research",
+        test: function(){
+            return game.researchResets >= 1
+                || game.researchStage >= 1
+                || game.researchStorySeen;
+        }
+    },
+
+    {
+        key: "reset1",
+        test: function(){
+            return (game.researchResets || 0) >= 1;
+        }
+    },
+
+    {
+        key: "stage3",
+        test: function(){
+            return (game.researchStage || 0) >= 3
+                || (game.maxResearchStage || 0) >= 3
+                || game.stage3AutoStorySeen;
+        }
+    },
+
+    {
+        key: "frontier",
+        test: function(){
+            return (game.researchStage || 0) >= 4
+                || (game.maxResearchStage || 0) >= 4
+                || game.stage4FrontierStorySeen;
+        }
+    },
+
+    // 本源层:「关于→游戏介绍」的"本源"主题
+    // (解锁条件 = 买下论文「结论」,originUnlocked 一旦置位就永久有效)
+    {
+        key: "origin",
+        test: function(){
+            return !!game.originUnlocked
+                || (game.originResets || 0) >= 1;
+        }
+    },
+
+    // 「你的理论」子页:完成过至少一次研究(originResets >= 1)
+    {
+        key: "ownTheory",
+        test: function(){
+            return (game.originResets || 0) >= 1;
+        }
+    }
+
+];
+
+
+// 是否已永久解锁某个条目
+function permaUnlock(key){
+
+    if(!game.permaUnlocks)
+        game.permaUnlocks = {};
+
+    return !!game.permaUnlocks[key];
+
+}
+
+
+// 置位一个永久解锁标记(返回本次是否新解锁)
+function markPermaUnlock(key){
+
+    if(permaUnlock(key))
+        return false;
+
+    game.permaUnlocks[key] = true;
+
+    return true;
+
+}
+
+
+// 每 tick 检查一次:把已满足条件的条目登记为"永久解锁"
+function updatePermaUnlocks(){
+
+    for(let i = 0; i < PERMA_UNLOCK_LIST.length; i++){
+
+        let rule = PERMA_UNLOCK_LIST[i];
+
+        if(!permaUnlock(rule.key) && rule.test())
+            markPermaUnlock(rule.key);
+
+    }
+
+}

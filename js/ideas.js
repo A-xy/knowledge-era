@@ -476,9 +476,10 @@ function metaPowerGain(){
         exp1CompletionBonus()
     );
 
-    // 本源层"你的理论":元-力量获取 ×Effect(未解锁时 ×1)
+    // 本源层"你的理论":元-力量获取 ×Effect
+    // (只有买了「推广理论I」才生效,否则 ×1)
     gain = gain.mul(
-        ownTheoryEffect()
+        ownTheoryMetaEffect()
     );
 
     return gain;

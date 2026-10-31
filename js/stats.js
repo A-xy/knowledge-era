@@ -12,6 +12,87 @@
 // (数值变化只更新文本,不重建,保持 details 展开状态)
 let lastStatsKey = "";
 
+
+// ---- 折叠状态保持 ----
+// 结构签名一变(例如完成研究把研究阶段清零,里程碑行跟着增减)就会重建
+// innerHTML,重建后所有 <details> 都会回到默认的收起状态,玩家正看着的
+// 条目会"自己合上"。这里在重建前记下哪些分组是展开的,重建后补回来。
+// 用 summary 的标签文本(冒号前的部分)当键 —— 冒号后是实时数值,不能用。
+function statsDetailsKey(summary){
+
+    if(!summary)
+        return "";
+
+    let t =
+    summary.textContent || "";
+
+    let i =
+    t.indexOf(":");
+
+    if(i < 0)
+        i = t.indexOf("：");
+
+    return (i > 0 ? t.slice(0, i) : t).trim();
+
+}
+
+
+// 记录展开的分组
+function captureStatsOpen(box){
+
+    let open = {};
+
+    if(!box || !box.querySelectorAll)
+        return open;
+
+    let list =
+    box.querySelectorAll("details");
+
+    for(let i = 0; i < list.length; i++){
+
+        if(!list[i].open)
+            continue;
+
+        let k =
+        statsDetailsKey(
+            list[i].querySelector
+            ? list[i].querySelector("summary")
+            : null);
+
+        if(k)
+            open[k] = true;
+
+    }
+
+    return open;
+
+}
+
+
+// 恢复展开的分组
+function restoreStatsOpen(box, open){
+
+    if(!box || !open || !box.querySelectorAll)
+        return;
+
+    let list =
+    box.querySelectorAll("details");
+
+    for(let i = 0; i < list.length; i++){
+
+        let k =
+        statsDetailsKey(
+            list[i].querySelector
+            ? list[i].querySelector("summary")
+            : null);
+
+        if(k && open[k])
+            list[i].open = true;
+
+    }
+
+}
+
 function statsKey(){
 
     let unlocked = 0;
@@ -36,7 +117,16 @@ function statsKey(){
         paperOwned("refExperiment") ? 1 : 0,      // 引用实验成果:行动点获取新增一行
         isEffectUnlocked("metaGain") ? 1 : 0,
         game.ideas >= 4 ? 1 : 0,  // 升级倍率效果影响理论力量分解
-        (game.theories.theory6 && game.theories.theory6.unlocked) ? 1 : 0  // 拓展理论:新增一行
+        (game.theories.theory6 && game.theories.theory6.unlocked) ? 1 : 0,  // 拓展理论:新增一行
+        ownTheoryUnlocked() ? 1 : 0,           // 你的理论:知识产出新增一行
+        theoremUpgradeOwned("propagateI") ? 1 : 0,  // 推广理论I:元-力量产出新增一行
+        theoremUpgradeOwned("propagateII") ? 1 : 0, // 推广理论II:行动点获取新增一行
+        ownTheoryTimePower() ? 1 : 0,          // 时光之力:T(t) 行
+        originUpgradeActive("knowledgeExpand") ? 1 : 0,  // 知识扩充:知识边界新增一行
+        originUpgradeActive("expBaseBoost") ? 1 : 0,     // 底数提升2:助手速率新增一行
+        originUnlocked() ? 1 : 0,                        // 本源获取:整个分组
+        originMilestoneActive(30) ? 1 : 0,               // 无尽阶梯II:本源获取新增一行
+        originUpgradeActive("deepOrigin") ? 1 : 0        // 深入本源:本源获取新增一行
     ].join(":");
 
 }
@@ -59,8 +149,14 @@ function renderStatsPage(){
 
         lastStatsKey = key;
 
+        // 重建会收起所有分组,先把展开状态抓下来
+        let open =
+        captureStatsOpen(panel);
+
         panel.innerHTML =
         buildStatsHTML();
+
+        restoreStatsOpen(panel, open);
 
     }
 
@@ -121,6 +217,12 @@ function buildStatsHTML(){
         '<div class="stat-line">元-力量效果7(知识边界):×<span class="stat-val" data-key="metaEff7"></span></div>';
     }
 
+    // 本源升级"知识扩充":知识边界 ×1e50^等级
+    if(originUpgradeActive("knowledgeExpand")){
+        html +=
+        '<div class="stat-line">本源·知识扩充:×<span class="stat-val" data-key="expandMult"></span></div>';
+    }
+
     html +=
     '<div class="stat-line">当前知识边界:<span class="stat-val" data-key="limitVal"></span>/s</div>';
 
@@ -128,6 +230,18 @@ function buildStatsHTML(){
     if(paperOwned("innovation")){
         html +=
         '<div class="stat-line">论文·注重创新:×<span class="stat-val" data-key="innovBonus"></span></div>';
+    }
+
+    // 本源层"你的理论":知识获取 ×Effect(完成过研究后才生效)
+    if(ownTheoryUnlocked()){
+        html +=
+        '<div class="stat-line">你的理论:×<span class="stat-val" data-key="ownTheoryK"></span></div>';
+    }
+
+    // 你的理论·时光之力:Effect 再 ×T(t)
+    if(ownTheoryTimePower()){
+        html +=
+        '<div class="stat-line">你的理论·时光之力 T(t):×<span class="stat-val" data-key="ownTheoryT"></span></div>';
     }
 
     // 论文"参考文献"系列(第6行):提高理论乘积的指数
@@ -201,6 +315,12 @@ function buildStatsHTML(){
     html +=
     '<div class="stat-line">重复实验1加成:×<span class="stat-val" data-key="exp1Mult"></span>(完成 <span class="stat-val" data-key="exp1C"></span> 次)</div>';
 
+    // 本源层"你的理论":买了「推广理论I」后,元-力量获取 ×Effect
+    if(theoremUpgradeOwned("propagateI")){
+        html +=
+        '<div class="stat-line">你的理论(推广理论I):×<span class="stat-val" data-key="ownTheoryMP"></span></div>';
+    }
+
     html += '</details>';
 
     // ---------- 想法价格(实验3 效果:价格膨胀起始点延后) ----------
@@ -250,7 +370,44 @@ function buildStatsHTML(){
         '(基础 <span class="stat-val" data-key="apExpBase"></span> + 论文·引用实验成果)</div>';
     }
 
+    // 本源层"你的理论":买了「推广理论II」后,行动点获取 ×Effect
+    if(theoremUpgradeOwned("propagateII")){
+        html +=
+        '<div class="stat-line">你的理论(推广理论II):×<span class="stat-val" data-key="ownTheoryAP"></span></div>';
+    }
+
     html += '</details>';
+
+    // ---------- 本源获取 ----------
+    // 公式:((累计行动点 + 本次研究重置可获得行动点)/1e80)^(1/40)
+    //       × 研究阶段加成 × 无尽阶梯II × 深入本源,最后取整
+    // 未解锁本源层的存档行动点总量远小于 1e80(恒为 0),整个分组不显示
+    if(originUnlocked()){
+
+        html +=
+        '<details class="stat-group">' +
+        '<summary>本源获取:<span class="stat-val" data-key="originGainVal"></span>/次</summary>' +
+        '<div class="stat-line">基础值:<span class="stat-val" data-key="originGainBase"></span>(由行动点计算)</div>' +
+        '<div class="stat-line">研究阶段加成:×<span class="stat-val" data-key="originGainStage"></span>' +
+        '(研究阶段 <span class="stat-val" data-key="originGainStageNum"></span>)</div>';
+
+        // 本源里程碑"无尽阶梯II"(完成 30 次研究):× (1 + 完成次数/30)
+        if(originMilestoneActive(30)){
+            html +=
+            '<div class="stat-line">无尽阶梯II:×<span class="stat-val" data-key="originGainStair"></span>' +
+            '(完成研究 <span class="stat-val" data-key="originGainStairN"></span> 次)</div>';
+        }
+
+        // 本源升级"深入本源":×2^等级
+        if(originUpgradeActive("deepOrigin")){
+            html +=
+            '<div class="stat-line">深入本源:×<span class="stat-val" data-key="originGainDeep"></span>' +
+            '(等级 <span class="stat-val" data-key="originGainDeepLv"></span>)</div>';
+        }
+
+        html += '</details>';
+
+    }
 
     // 实验完成次数生产速率(自动实验助手)
     html +=
@@ -279,6 +436,12 @@ function buildStatsHTML(){
         html +=
         '<div class="stat-line">里程碑·无尽阶梯:×<span class="stat-val" data-key="endlessStair"></span>' +
         '(研究重置 <span class="stat-val" data-key="endlessResets"></span> 次)</div>';
+    }
+
+    // 本源升级"底数提升2":自动实验助手每级的加成底数
+    if(originUpgradeActive("expBaseBoost")){
+        html +=
+        '<div class="stat-line">本源·底数提升2:每级 ×<span class="stat-val" data-key="expBaseVal"></span></div>';
     }
 
     html += '</details>';
@@ -320,9 +483,25 @@ function updateStatVals(){
     setStat("summaryMult", summaryBoundaryBonus());
     setStat("limitVal", knowledgeLimit());
 
+    // 本源升级"知识扩充":知识边界倍率
+    if(originUpgradeActive("knowledgeExpand"))
+        setStat("expandMult", knowledgeExpandMult());
+
     // 论文升级"注重创新":知识获取倍率
     if(paperOwned("innovation"))
         setStat("innovBonus", innovationBonus());
+
+    // 本源层"你的理论":知识 / 元-力量 / 行动点三处倍率
+    if(ownTheoryUnlocked()){
+        setStat("ownTheoryK", ownTheoryEffect());
+        setStat("ownTheoryT", ownTheoryTimeMult());
+    }
+
+    if(theoremUpgradeOwned("propagateI"))
+        setStat("ownTheoryMP", ownTheoryMetaEffect());
+
+    if(theoremUpgradeOwned("propagateII"))
+        setStat("ownTheoryAP", ownTheoryAPEffect());
 
     // 论文"参考文献-引用旧理论":理论1~5^1.1 带来的额外倍率(= 乘积^0.1)
     if(paperOwned("refLegacyTheory"))
@@ -341,6 +520,26 @@ function updateStatVals(){
     // 行动点获取:最终值 / 基础值 / 里程碑 stage2 倍率
     setStat("apGain", actionPointsGain());
     setStat("apBase", actionPointsBase());
+
+    // 本源获取:最终值 / 基础值(由行动点计算) / 研究阶段加成
+    if(originUnlocked()){
+        setStat("originGainVal", originGain());
+        setStat("originGainBase", originGainBase());
+        setStat("originGainStage", originGainStageMult());
+        setStat("originGainStageNum", game.researchStage || 0);
+    }
+
+    // 本源里程碑"无尽阶梯II"
+    if(originMilestoneActive(30)){
+        setStat("originGainStair", originStaircaseBonus());
+        setStat("originGainStairN", originResets());
+    }
+
+    // 本源升级"深入本源"
+    if(originUpgradeActive("deepOrigin")){
+        setStat("originGainDeep", deepOriginMult());
+        setStat("originGainDeepLv", originUpgradeLevel("deepOrigin"));
+    }
 
     if(isMilestoneActive("stage2")){
         setStat("apStage2", actionPointsStageMultiplier());
@@ -441,6 +640,10 @@ function updateStatVals(){
         setStat("endlessResets", endlessStaircaseResets());
     }
 
+    // 本源升级"底数提升2":每级加成底数
+    if(originUpgradeActive("expBaseBoost"))
+        setStat("expBaseVal", expAssistantBase());
+
 }
 
 
@@ -452,21 +655,25 @@ function updateStatVals(){
 //   研究解锁后 : 累计获得行动点 / 研究重置次数
 //   研究重置后 : 最快研究重置用时
 //   研究阶段3后: 实验完成总次数
+//   解锁本源后 : 完成研究次数 / 累计本源
+// ⚠ 以上解锁都是"永久"的:登记在 game.permaUnlocks,
+//   完成研究把想法 / 研究阶段清零后,这些条目不会跟着消失。
 // ============================================================
 
-// 组可见签名(想法/研究/最快重置/阶段3),变化时重建 DOM
+// 组可见签名(想法/研究/最快重置/阶段3/本源),变化时重建 DOM
 let lastGameStatsKey = "";
 
 function gameStatsKey(){
 
     return [
-        (game.totalIdeas > 0 || game.ideaStorySeen) ? 1 : 0,
-        (game.researchResets > 0 || game.researchStage >= 1
-            || game.researchStorySeen) ? 1 : 0,
-        (game.researchResets >= 1) ? 1 : 0,
-        (game.researchStage >= 3) ? 1 : 0,
+        permaUnlock("idea") ? 1 : 0,
+        permaUnlock("research") ? 1 : 0,
+        permaUnlock("reset1") ? 1 : 0,
+        permaUnlock("stage3") ? 1 : 0,
         // 第 5 段:完成过研究后,累计行动点改为"本次研究"口径
-        (typeof originResets === "function" && originResets() >= 1) ? 1 : 0
+        (typeof originResets === "function" && originResets() >= 1) ? 1 : 0,
+        // 第 6 段:解锁本源层 → 显示完成研究次数 / 累计本源
+        permaUnlock("origin") ? 1 : 0
     ].join(":");
 
 }
@@ -528,6 +735,10 @@ function renderGameStats(){
     let showOrigin =
     parts[4] === "1";
 
+    // 解锁本源层:完成研究次数 / 累计本源
+    let showOriginStats =
+    parts[5] === "1";
+
     if(key !== lastGameStatsKey){
 
         lastGameStatsKey = key;
@@ -551,7 +762,9 @@ function renderGameStats(){
                 ? "在本次研究中，你累计获得了"
                 : "你累计获得了") +
             '<span class="stat-val gs-totalap"></span>行动点</div>' +
-            '<div class="game-stat">你一共进行了<span class="stat-val gs-resets"></span>次研究重置</div>';
+            // 这里的次数是原始值,不含"真·无尽阶梯"等加成
+            // (其它地方(里程碑/助手/成就)用的都是 effectiveResearchResets())
+            '<div class="game-stat">你一共进行了<span class="stat-val gs-resets"></span>次研究重置（不计入加成）</div>';
         }
 
         if(showFastest){
@@ -562,6 +775,12 @@ function renderGameStats(){
         if(showStage3){
             html +=
             '<div class="game-stat">所有实验合计已完成<span class="stat-val gs-expall"></span>次</div>';
+        }
+
+        if(showOriginStats){
+            html +=
+            '<div class="game-stat">你一共完成了<span class="stat-val gs-originresets"></span>次研究</div>' +
+            '<div class="game-stat">你累计获得了<span class="stat-val gs-totalorigin"></span>本源</div>';
         }
 
         panel.innerHTML = html;
@@ -606,6 +825,12 @@ function renderGameStats(){
 
     if(showStage3){
         set(".gs-expall", format(totalExpCompletions()));
+    }
+
+    if(showOriginStats){
+        set(".gs-originresets", originResets());
+        // 累计获得的本源(不扣购买消耗)
+        set(".gs-totalorigin", format(totalOrigin()));
     }
 
 }

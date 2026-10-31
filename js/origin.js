@@ -3,7 +3,7 @@
 // 论文升级「结论」完成后解锁,此后本源页面永久显示。
 // 在这里可以"完成研究"(本源重置):
 //   条件:当前持有论文升级「结论」
-//   获得:本源 = floor((本轮累计行动点 / 1e80)^(1/40) × 2^(研究阶段-10) × 阶梯倍率)
+//   获得:本源 = floor(((本轮累计行动点 + 本次重置可得AP) / 1e80)^(1/40) × 2^(研究阶段-10) × 阶梯倍率)
 //         ⚠ 累计行动点会在完成研究时清零,所以本源是"每次研究单独结算"的
 // 本源重置会重置:行动点、研究阶段、助手(解锁与等级)、灵感、论文升级、
 //   实验重复完成次数、研究层里程碑,以及理论与想法页面的内容(含知识)。
@@ -18,7 +18,8 @@
 // 配置(调整这里即可改变本源层参数)
 // ============================================================
 const ORIGIN_CONFIG = {
-    // 本源数量公式:floor((累计AP / apScale)^apExp × 2^(研究阶段 - stageBase) × 阶梯倍率)
+    // 本源数量公式:floor((行动点总量 / apScale)^apExp × 2^(研究阶段 - stageBase) × 阶梯倍率)
+    // 行动点总量 = 本轮累计行动点 + 本次研究重置可获得的行动点
     apScale: new Decimal("1e80"),
     apExp: 1 / 40,          // 40 次方根
     stageBase: 10,          // 研究阶段每高出 10 一级,本源翻倍
@@ -30,6 +31,17 @@ const ORIGIN_CONFIG = {
 
     // 论文发表员的默认阈值(本源;玩家可在助手页改)
     publisherDefaultThreshold: "1",
+    // 论文发表员·时间模式默认秒数(本次本源的游戏时间达到该值 → 自动完成研究)
+    publisherDefaultTime: "60",
+
+    // 成就"DDL战士":在这么多秒内完成一次研究(游戏时间,本轮用时)
+    fastOriginWindow: 10,
+
+    // 成就"成果斐然":完成研究达到该次数
+    manyOriginTimes: 300,
+
+    // 本源升级"知识扩充":每级知识边界 ×该倍率
+    knowledgeExpandBase: new Decimal("1e50"),
 
     // 里程碑(按完成研究次数点亮)
     //   n: 需要完成的研究次数
@@ -81,7 +93,11 @@ const ORIGIN_CONFIG = {
             n: 30,
             id: "endlessStair2",
             name: "无尽阶梯II",
-            desc: "本源获取 ×(1+完成研究次数/30),完成 300 次研究时达到上限"
+            desc: "本源获取 ×(1+完成研究次数/30),完成 300 次研究时达到上限",
+            // 点亮后追加"当前实际倍率"(随完成次数变化)
+            detail: function(){
+                return " ｜ 当前 ×" + format(originStaircaseBonus());
+            }
         }
     ]
 };
@@ -89,30 +105,95 @@ const ORIGIN_CONFIG = {
 
 // ============================================================
 // 你的理论(本源层第二子页)
-// 理论力量 p 以 baseRate 每秒增长,速率再乘 2^(未使用定理数)。
+// 理论力量 p 以 baseRate 每秒增长,速率再乘 定理倍率^(未使用定理数)。
 // p 不受任何其它系统加成(元-力量 / 研究里程碑 / 论文都不影响它)。
-// Effect = p(购买"改写公式"后为 p^2),直接乘在知识 / 元-力量 / 行动点的产出上。
+//
+// 初始只有知识获取 ×Effect;「推广理论I / II」分别把 Effect 加到
+// 元-力量与行动点上(未购买时该项 ×1)。
+// Effect 由公式决定(默认 Effect = p;「公式增强」系列依次升级为
+//   p*ln(p) → p*sqrt(p) → p^2),购买「时光之力」后再 ×T(t)。
 //
 // 定理:三种途径各自按门槛自动获得,三者之和即定理总数(只增不减 ——
 // 知识被本源重置清空后,已经拿到的定理不会丢)。
 //   知识     :第 n 个需要 10^(600n)
 //   累计AP   :第 n 个需要 10^(40n)
 //   累计本源 :第 n 个需要 2^n
-// 每个"未使用"的定理使理论力量获取 ×2;购买升级会消耗定理。
+// 每个"未使用"的定理使理论力量获取 ×2(可升级到 ×2.5);
+// 购买升级会消耗定理,并把理论力量 p 重置为 1。
 // ============================================================
 const OWN_THEORY_CONFIG = {
     baseRate: 0.1,       // 理论力量基础获取速率(每秒)
     theoremMult: 2,      // 每个未使用定理使获取速率 ×2
+    theoremMultBoost: 2.5, // 升级"倍率增强"后改为 ×2.5
     knowledgeBase: 600,  // 第 n 个定理需要 10^(knowledgeBase*n) 知识
     apBase: 40,          // 第 n 个定理需要 10^(apBase*n) 累计行动点
     originBase: 2,       // 第 n 个定理需要 originBase^n 累计本源
+
+    // 时光之力(T(t),t = 距上次完成研究的秒数)
+    timeFastCap: 1000,        // 迅速:T(t) = min(1000, 90000/t)
+    timeFastConstant: 90000,
+
     // 消耗定理的升级(数组顺序即显示顺序)
+    //   require        : 前置升级(数组,全部购买后才可买)
+    //   exclusive      : 互斥组;同组只能买一个
+    //   requireUpgrades: 需要已购买的升级数(不含同组)
     upgrades: [
         {
-            key: "powerSquared",
-            name: "改写公式",
-            desc: "将公式改为 Effect = p^2",
-            cost: 6
+            key: "propagateI",
+            name: "推广理论I",
+            desc: "你的理论也加成元-力量获取",
+            cost: 2
+        },
+        {
+            key: "propagateII",
+            name: "推广理论II",
+            desc: "你的理论也加成行动点获取",
+            cost: 2,
+            require: ["propagateI"]
+        },
+        {
+            key: "formulaI",
+            name: "公式增强I",
+            desc: "将公式升级为 Effect = p*ln(p)",
+            cost: 1
+        },
+        {
+            key: "formulaII",
+            name: "公式增强II",
+            desc: "将公式升级为 Effect = p*sqrt(p)",
+            cost: 3,
+            require: ["formulaI"]
+        },
+        {
+            key: "formulaIII",
+            name: "公式增强III",
+            desc: "将公式升级为 Effect = p^2",
+            cost: 4,
+            require: ["formulaII"]
+        },
+        {
+            key: "theoremBoost",
+            name: "倍率增强",
+            desc: "每个未使用的定理对理论力量的加成提升到 2.5 倍",
+            cost: 3
+        },
+        {
+            key: "timeFast",
+            name: "时光之力·迅速",
+            desc: "Effect × T(t)，其中 T(t) = min(1000, 90000/t)，" +
+                  "t 为距上次完成研究的秒数。与「时光之力·持久」互斥",
+            cost: 4,
+            exclusive: "timePower",
+            requireUpgrades: 6
+        },
+        {
+            key: "timePersist",
+            name: "时光之力·持久",
+            desc: "Effect × T(t)，其中 T(t) = t，" +
+                  "t 为距上次完成研究的秒数。与「时光之力·迅速」互斥",
+            cost: 4,
+            exclusive: "timePower",
+            requireUpgrades: 6
         }
     ]
 };
@@ -139,7 +220,11 @@ const ORIGIN_UPGRADE_LIST = [
         type: "once",
         cost: new Decimal(10),
         desc: "移除里程碑「基础研究」「无尽阶梯」的加成上限;" +
-              "研究重置次数 ×floor(√(累计本源+1))"
+              "研究重置次数 ×floor(√(累计本源+1))",
+        activeText: function(){
+            return "当前:研究重置次数 ×" +
+            format(trueStaircaseMult());
+        }
     },
     {
         key: "deepOrigin",
@@ -147,7 +232,66 @@ const ORIGIN_UPGRADE_LIST = [
         type: "level",
         cost: new Decimal(10),
         costGrowth: 10,     // 每级价格 ×10
-        desc: "本源获取 ×2"
+        desc: "本源获取 ×2;论文发表员的阈值同步 ×2",
+        activeText: function(lv){
+            return "合计:×" + format(deepOriginMult());
+        }
+    },
+    {
+        // 里程碑「跨学科研究」的底数:行动点获取 = 底数^(阶段-1)
+        key: "stageBaseBoost",
+        name: "底数提升1",
+        type: "level",
+        cost: new Decimal("1e5"),
+        costGrowth: 5,      // 每级价格 ×5
+        desc: "里程碑「跨学科研究」的底数 +0.2(初始 2)",
+        // 未购买时也显示当前底数(玩家问"现在是多少")
+        currentText: function(){
+            return "当前底数 " + baseNumberText(stageAPBase());
+        },
+        activeText: function(lv){
+            return "当前底数 " + baseNumberText(stageAPBase());
+        }
+    },
+    {
+        // 自动实验助手的升级底数:效率 = 基础 × 底数^等级
+        key: "expBaseBoost",
+        name: "底数提升2",
+        type: "level",
+        cost: new Decimal("1e6"),
+        costGrowth: 5,
+        desc: "每次升级自动实验助手时,速度加成倍数 +0.2(初始 2)",
+        // 未购买时也显示当前底数
+        currentText: function(){
+            return "当前底数 " + baseNumberText(expAssistantBase());
+        },
+        activeText: function(lv){
+            return "当前底数 " + baseNumberText(expAssistantBase());
+        }
+    },
+    {
+        key: "knowledgeExpand",
+        name: "知识扩充",
+        type: "level",
+        cost: new Decimal("1e7"),
+        costGrowth: 10,
+        desc: "知识边界 ×1e50",
+        activeText: function(lv){
+            return "合计:×" + format(knowledgeExpandMult());
+        }
+    },
+    {
+        // 终点标记:买下它代表这个版本已经玩到头了,
+        // 实际能力留到下个版本实装(所以这里只置位、不给任何加成)
+        key: "selfImprove",
+        name: "自我提升",
+        type: "once",
+        cost: new Decimal("1e28"),
+        desc: "解锁能力(暂未实装)。" +
+              "买到它就意味着本版本的内容已经走完,后续版本将由此继续",
+        activeText: function(){
+            return "已解锁能力槽位(暂未实装)";
+        }
     }
 ];
 
@@ -186,6 +330,16 @@ function ensureOriginCompat(){
             || game.lastOriginResetTime === undefined))
         game.lastOriginResetTime = game.totalTime || 0;
 
+    // 上一次完成研究的快照(旧存档没有 → 显示"—")
+    if(game.lastOriginRunTime === undefined)
+        game.lastOriginRunTime = null;
+
+    if(game.lastOriginRunGain === undefined
+        || game.lastOriginRunGain === null)
+        game.lastOriginRunGain = null;
+    else if(!(game.lastOriginRunGain instanceof Decimal))
+        game.lastOriginRunGain = new Decimal(game.lastOriginRunGain);
+
     // 助手提拔员(本源里程碑"自动提升"解锁显示)
     if(!game.assistants)
         game.assistants = {};
@@ -198,15 +352,24 @@ function ensureOriginCompat(){
 
     // 论文发表员(本源里程碑"自动发表"解锁显示)
     // 阈值与研究总结员一样以**字符串**存储,支持科学计数法
+    // time: 时间模式的秒数(成就"DDL战士"解锁该模式后才会用到)
     if(game.assistants.paperPublisher === undefined){
         game.assistants.paperPublisher = {
             unlocked: false,
             enabled: true,
-            threshold: ORIGIN_CONFIG.publisherDefaultThreshold
+            threshold: ORIGIN_CONFIG.publisherDefaultThreshold,
+            time: ORIGIN_CONFIG.publisherDefaultTime
         };
-    }else if(game.assistants.paperPublisher.threshold === undefined){
-        game.assistants.paperPublisher.threshold =
-        ORIGIN_CONFIG.publisherDefaultThreshold;
+    }else{
+
+        if(game.assistants.paperPublisher.threshold === undefined)
+            game.assistants.paperPublisher.threshold =
+            ORIGIN_CONFIG.publisherDefaultThreshold;
+
+        if(game.assistants.paperPublisher.time === undefined)
+            game.assistants.paperPublisher.time =
+            ORIGIN_CONFIG.publisherDefaultTime;
+
     }
 
     // ---- 你的理论 ----
@@ -226,6 +389,26 @@ function ensureOriginCompat(){
 
     if(!game.theoremUpgrades || typeof game.theoremUpgrades !== "object")
         game.theoremUpgrades = {};
+
+    // 定理升级改版兼容(2026-10-31):
+    // 旧版只有一个升级「改写公式」(powerSquared),新版已把它删除。
+    // 读到旧存档时自动执行一次"重置定理升级":清空购买记录(定理按配置
+    // 自动返还),理论力量重置为 1,让玩家按新表重新分配。
+    if(game.theoremUpgradeVersion === undefined)
+        game.theoremUpgradeVersion = 1;
+
+    if(game.theoremUpgradeVersion < 2){
+
+        if(game.theoremUpgrades.powerSquared){
+
+            game.theoremUpgrades = {};
+            game.ownTheory = new Decimal(1);
+
+        }
+
+        game.theoremUpgradeVersion = 2;
+
+    }
 
     if(game.totalOrigin === undefined)
         game.totalOrigin = new Decimal(0);
@@ -323,26 +506,64 @@ function autoConclusionReady(){
 }
 
 
+// ============================================================
 // 本次完成研究可获得的本源
-//   floor( (totalAP / 1e80)^(1/40) × 2^(研究阶段-10) × 无尽阶梯II倍率 )
-// 累计行动点不足 1e80 时返回 0(实际上结论本身就要求 1e80)
+//   floor( ((本轮累计行动点 + 本次研究重置可获得的行动点) / 1e80)^(1/40)
+//          × 2^(研究阶段-10) × 无尽阶梯II倍率 × 深入本源倍率 )
+// 加上"本次研究重置可获得的行动点":当前已经攒下的知识可以直接计进本源,
+// 不必先做一次研究重置把知识兑成行动点。
+// 行动点总量不足 1e80 时返回 0(实际上结论本身就要求 1e80)
+// ============================================================
 function originGain(){
 
-    let ap =
-    game.totalResearchPoints || new Decimal(0);
-
+    // 基础值就是 40 次方根那一步;行动点总量不足 1e80 时它 < 1 → 本源为 0
     let base =
-    ap.div(ORIGIN_CONFIG.apScale);
+    originGainBase();
 
     if(base.lt(1))
         return new Decimal(0);
 
-    // 40 次方根,这里先不取整
-    let steps =
-    base.pow(ORIGIN_CONFIG.apExp);
+    // 取整放在最外层:中间任何一步先取整,后面的倍率就会乘在
+    // 被截断的小数上,白白损失收益(阶段倍率与无尽阶梯II 都受影响)
+    return base
+    .mul(originGainStageMult())
+    .mul(originStaircaseBonus())
+    // 本源升级"深入本源":×2^等级
+    .mul(deepOriginMult())
+    .floor();
 
-    let stageMul =
-    Decimal.pow(
+}
+
+
+// 本源公式用的行动点总量 = 本轮累计行动点 + 本次研究重置可获得的行动点
+function originGainTotalAP(){
+
+    return (game.totalResearchPoints || new Decimal(0))
+    .add(originGainPendingAP());
+
+}
+
+
+// 本源获取的"基础值":只由行动点总量决定(40 次方根前的那一步)
+// 统计页把它单独列出来,方便看清倍率都是乘在什么上面
+function originGainBase(){
+
+    let base =
+    originGainTotalAP()
+    .div(ORIGIN_CONFIG.apScale);
+
+    if(base.lt(1))
+        return new Decimal(0);
+
+    return base.pow(ORIGIN_CONFIG.apExp);
+
+}
+
+
+// 研究阶段加成:×2^(研究阶段 - 10);阶段不足 10 时 ×1
+function originGainStageMult(){
+
+    return Decimal.pow(
         2,
         Math.max(
             (game.researchStage || 0) - ORIGIN_CONFIG.stageBase,
@@ -350,14 +571,17 @@ function originGain(){
         )
     );
 
-    // 取整放在最外层:中间任何一步先取整,后面的倍率就会乘在
-    // 被截断的小数上,白白损失收益(阶段倍率与无尽阶梯II 都受影响)
-    return steps
-    .mul(stageMul)
-    .mul(originStaircaseBonus())
-    // 本源升级"深入本源":×2^等级
-    .mul(deepOriginMult())
-    .floor();
+}
+
+
+// 本源公式里的"本次研究重置可获得的行动点"
+// (即现在立刻做一次研究重置能拿到的 AP;研究层未解锁时按 0 计)
+function originGainPendingAP(){
+
+    if(typeof actionPointsGain !== "function")
+        return new Decimal(0);
+
+    return actionPointsGain();
 
 }
 
@@ -455,14 +679,33 @@ function theoremUnused(){
 }
 
 
-// 理论力量获取速率 = 0.1 × 2^(未使用定理)
+// 是否购买了某个定理升级
+function theoremUpgradeOwned(key){
+
+    return !!(game.theoremUpgrades
+        && game.theoremUpgrades[key]);
+
+}
+
+
+// 每个未使用定理的倍率(「倍率增强」后为 2.5)
+function ownTheoryTheoremMult(){
+
+    return theoremUpgradeOwned("theoremBoost")
+    ? OWN_THEORY_CONFIG.theoremMultBoost
+    : OWN_THEORY_CONFIG.theoremMult;
+
+}
+
+
+// 理论力量获取速率 = 0.1 × 定理倍率^(未使用定理)
 // 不受元-力量 / 研究里程碑 / 论文等任何外部加成影响
 function ownTheoryRate(){
 
     return new Decimal(OWN_THEORY_CONFIG.baseRate)
     .mul(
         Decimal.pow(
-            OWN_THEORY_CONFIG.theoremMult,
+            ownTheoryTheoremMult(),
             theoremUnused()
         )
     );
@@ -470,23 +713,193 @@ function ownTheoryRate(){
 }
 
 
-// 是否已把公式改写为 p^2
-function ownTheorySquared(){
-    return !!(game.theoremUpgrades
-        && game.theoremUpgrades.powerSquared);
+// ------------------------------------------------------------
+// 公式:Effect 的形状
+//   0: p(初始)
+//   1: p*ln(p)      「公式增强I」
+//   2: p*sqrt(p)    「公式增强II」
+//   3: p^2          「公式增强III」
+// 三级是递进替换关系,取已购买的最高一级
+// ------------------------------------------------------------
+function ownTheoryFormulaTier(){
+
+    if(theoremUpgradeOwned("formulaIII"))
+        return 3;
+
+    if(theoremUpgradeOwned("formulaII"))
+        return 2;
+
+    if(theoremUpgradeOwned("formulaI"))
+        return 1;
+
+    return 0;
+
 }
 
 
-// Effect:未改写公式时为 p,改写后为 p^2
-// 直接乘在知识 / 元-力量 / 行动点的产出上
-function ownTheoryEffect(){
+// 公式里不含量纲的那一段(给界面显示用)
+function ownTheoryFormulaBaseText(){
+
+    let tier =
+    ownTheoryFormulaTier();
+
+    if(tier === 3) return "p^2";
+    if(tier === 2) return "p*sqrt(p)";
+    if(tier === 1) return "p*ln(p)";
+
+    return "p";
+
+}
+
+
+// 完整公式文本(买了时光之力后末尾多一项 T(t))
+function ownTheoryFormulaText(){
+
+    let text =
+    ownTheoryFormulaBaseText();
+
+    if(ownTheoryTimePower())
+        text += " * T(t)";
+
+    return text;
+
+}
+
+
+// 已选择的时光之力:null | "timeFast" | "timePersist"
+function ownTheoryTimePower(){
+
+    if(theoremUpgradeOwned("timeFast"))
+        return "timeFast";
+
+    if(theoremUpgradeOwned("timePersist"))
+        return "timePersist";
+
+    return null;
+
+}
+
+
+// t = 距上次完成研究的秒数(本源未解锁 / 尚未完成研究时为 0)
+function ownTheoryElapsed(){
+
+    let start =
+    game.lastOriginResetTime;
+
+    if(start === null || start === undefined)
+        return 0;
+
+    return Math.max(0, (game.totalTime || 0) - start);
+
+}
+
+
+// T(t):未购买时光之力时为 1
+//   迅速:T(t) = min(1000, 90000/t)   —— 完成研究后立刻给出高倍率,随后衰减
+//   持久:T(t) = t                     —— 需要重新累积时间
+function ownTheoryTimeMult(){
+
+    let key =
+    ownTheoryTimePower();
+
+    if(!key)
+        return new Decimal(1);
+
+    let t =
+    ownTheoryElapsed();
+
+    if(key === "timeFast"){
+
+        if(t <= 0)
+            return new Decimal(OWN_THEORY_CONFIG.timeFastCap);
+
+        let v =
+        new Decimal(OWN_THEORY_CONFIG.timeFastConstant).div(t);
+
+        return v.gt(OWN_THEORY_CONFIG.timeFastCap)
+        ? new Decimal(OWN_THEORY_CONFIG.timeFastCap)
+        : v;
+
+    }
+
+    return new Decimal(t);
+
+}
+
+
+// 公式的值(不含 T(t))
+function ownTheoryFormulaValue(){
 
     let p =
     ownTheoryPower();
 
-    return ownTheorySquared()
-    ? p.pow(2)
-    : p;
+    let tier =
+    ownTheoryFormulaTier();
+
+    if(tier === 1){
+        // p = 1 时 ln(p) = 0,会让产出瞬间归零
+        // (购买升级与完成研究都会把 p 重置为 1,下一帧就开始增长)
+        if(p.lte(1))
+            return p;
+        return p.mul(p.ln());
+    }
+
+    if(tier === 2)
+        return p.mul(p.sqrt());
+
+    if(tier === 3)
+        return p.pow(2);
+
+    return p;
+
+}
+
+
+// Effect = 公式值 × T(t)
+// 知识始终吃这个倍率;元-力量 / 行动点要买「推广理论I / II」才吃
+function ownTheoryEffect(){
+
+    return ownTheoryFormulaValue()
+    .mul(ownTheoryTimeMult());
+
+}
+
+
+// 元-力量获取倍率(未买「推广理论I」时 ×1)
+function ownTheoryMetaEffect(){
+
+    return theoremUpgradeOwned("propagateI")
+    ? ownTheoryEffect()
+    : new Decimal(1);
+
+}
+
+
+// 行动点获取倍率(未买「推广理论II」时 ×1)
+function ownTheoryAPEffect(){
+
+    return theoremUpgradeOwned("propagateII")
+    ? ownTheoryEffect()
+    : new Decimal(1);
+
+}
+
+
+// 效果作用范围文本(知识 → 知识/元-力量 → 知识/元-力量/行动点)
+function ownTheoryTargetText(){
+
+    let parts = ["知识产出"];
+
+    if(theoremUpgradeOwned("propagateI"))
+        parts.push("元-力量产出");
+
+    if(theoremUpgradeOwned("propagateII"))
+        parts.push("行动点产出");
+
+    if(parts.length === 1)
+        return parts[0];
+
+    return parts.slice(0, -1).join("、") + "与" + parts[parts.length - 1];
 
 }
 
@@ -617,8 +1030,102 @@ function theoremUpgradeConf(key){
 }
 
 
+// 已购买的升级数(exclude 给出互斥组时,不统计该组)
+function theoremUpgradeCount(exclude){
+
+    let n = 0;
+
+    for(let i = 0; i < OWN_THEORY_CONFIG.upgrades.length; i++){
+
+        let conf = OWN_THEORY_CONFIG.upgrades[i];
+
+        if(exclude && conf.exclusive === exclude)
+            continue;
+
+        if(theoremUpgradeOwned(conf.key))
+            n++;
+
+    }
+
+    return n;
+
+}
+
+
+// 升级的解锁条件:返回 null 表示可以购买,否则返回锁定原因文本
+function theoremUpgradeLockReason(key){
+
+    let conf =
+    theoremUpgradeConf(key);
+
+    if(!conf)
+        return "未知升级";
+
+    if(theoremUpgradeOwned(key))
+        return null;
+
+    // 前置升级
+    if(conf.require){
+
+        for(let i = 0; i < conf.require.length; i++){
+
+            let req = conf.require[i];
+
+            if(!theoremUpgradeOwned(req)){
+
+                let rconf =
+                theoremUpgradeConf(req);
+
+                return "需要先购买「" +
+                (rconf ? rconf.name : req) + "」";
+
+            }
+
+        }
+
+    }
+
+    // 互斥组:同组只能买一个
+    if(conf.exclusive){
+
+        for(let i = 0; i < OWN_THEORY_CONFIG.upgrades.length; i++){
+
+            let other = OWN_THEORY_CONFIG.upgrades[i];
+
+            if(other.key === key || other.exclusive !== conf.exclusive)
+                continue;
+
+            if(theoremUpgradeOwned(other.key))
+                return "已选择「" + other.name + "」";
+
+        }
+
+    }
+
+    // 需要已购买的升级总数(不含自身所在的互斥组)
+    if(conf.requireUpgrades !== undefined){
+
+        let n =
+        theoremUpgradeCount(conf.exclusive);
+
+        if(n < conf.requireUpgrades){
+
+            return "需要已购买 " + conf.requireUpgrades +
+            " 个理论升级（当前 " + n + " 个）";
+
+        }
+
+    }
+
+    return null;
+
+}
+
+
 // 购买定理升级(消耗定理,不可退)
-// 返回 "ok" | "owned"(已购买) | "noTheorem"(定理不够) | "none"
+// 购买后理论力量 p 重置为 1(升级是"拿现有的 p 换更陡的曲线")
+// 返回 "ok" | "owned"(已购买) | "locked"(前置/互斥未满足)
+//      | "noTheorem"(定理不够) | "none"
 function buyTheoremUpgrade(key){
 
     let conf =
@@ -633,10 +1140,16 @@ function buyTheoremUpgrade(key){
     if(game.theoremUpgrades[key])
         return "owned";
 
+    if(theoremUpgradeLockReason(key))
+        return "locked";
+
     if(theoremUnused() < conf.cost)
         return "noTheorem";
 
     game.theoremUpgrades[key] = true;
+
+    // 消耗定理的代价之外,p 也要从头积攒
+    game.ownTheory = new Decimal(1);
 
     saveGame();
 
@@ -783,6 +1296,12 @@ function buyOriginUpgrade(key){
     else
         game.originUpgrades[key] = true;
 
+    // 深入本源:本源获取 ×2 → 论文发表员的阈值也同步 ×2。
+    // 否则同样的研究进度会让 originGain() 提前翻倍达标,
+    // 自动完成研究变得比买之前更频繁。
+    if(key === "deepOrigin")
+        syncPublisherThreshold(2);
+
     saveGame();
 
     renderOriginPage();
@@ -792,12 +1311,110 @@ function buyOriginUpgrade(key){
 }
 
 
+// 阈值写回字符串:小数用普通写法,大数用 "1.5e120"(去掉浮点毛刺)
+// 结果必须能被 research.js 的 SETTING_NUMBER_RE 接受
+function settingNumberString(v){
+
+    if(!(v instanceof Decimal))
+        v = new Decimal(v);
+
+    if(v.lt(1e6))
+        return String(Math.round(v.toNumber() * 1000) / 1000);
+
+    let exp =
+    v.log10().floor();
+
+    let m =
+    Math.round(
+        v.div(Decimal.pow(10, exp)).toNumber() * 1000
+    ) / 1000;
+
+    // 9.9995 这类进位到 10 的,归一成 1e(n+1)
+    if(m >= 10){
+        m = m / 10;
+        exp = exp.add(1);
+    }
+
+    return String(m) + "e" + exp.toString();
+
+}
+
+
+// 论文发表员的阈值 ×mult(阈值以字符串存储,支持科学计数法)
+// 返回是否真的改了(助手不存在时不动)
+function syncPublisherThreshold(mult){
+
+    let a =
+    game.assistants
+    ? game.assistants.paperPublisher
+    : null;
+
+    if(!a)
+        return false;
+
+    // 非法 / 缺省值按默认阈值处理,顺便把存档里的脏值修正掉
+    let cur =
+    (typeof parseSettingValue === "function")
+    ? parseSettingValue(a.threshold, 1)
+    : null;
+
+    if(!cur)
+        cur = new Decimal(ORIGIN_CONFIG.publisherDefaultThreshold);
+
+    a.threshold =
+    settingNumberString(cur.mul(mult));
+
+    // 助手页的输入框跟着改(强制回写,不受"正在编辑"保护影响)
+    if(typeof syncHelperInputs === "function"
+        && typeof document !== "undefined"){
+
+        let box =
+        document.getElementById("researchHelpers");
+
+        if(box)
+            syncHelperInputs(box, true);
+
+    }
+
+    return true;
+
+}
+
+
 // 深入本源:本源获取倍率 = 2^等级
+// ⚠ 必须 round:pow 内部走 exp/ln,2^3 会算成 7.999999999999999,
+// 本源公式最后要 floor,不取整就会白掉 1 点本源
 function deepOriginMult(){
 
     return Decimal.pow(
         2,
         originUpgradeLevel("deepOrigin")
+    ).round();
+
+}
+
+
+// 知识扩充:知识边界倍率 = 1e50^等级
+function knowledgeExpandMult(){
+
+    return ORIGIN_CONFIG.knowledgeExpandBase.pow(
+        originUpgradeLevel("knowledgeExpand")
+    );
+
+}
+
+
+// 底数这类小数的显示(2 → "2",2.2 → "2.2",顺手抹掉浮点毛刺)
+function baseNumberText(v){
+
+    let n =
+    (v instanceof Decimal) ? v.toNumber() : Number(v);
+
+    if(!isFinite(n))
+        return format(v);
+
+    return String(
+        Math.round(n * 100) / 100
     );
 
 }
@@ -823,6 +1440,26 @@ function originReset(auto){
     // ---- 1. 先结算本源与次数 ----
     let gain =
     originGain();
+
+    // 本轮用时要按"清零前"的起算时间算,所以先记录再更新 lastOriginResetTime
+    let runStart =
+    game.lastOriginResetTime;
+
+    let runTime =
+    (runStart === null || runStart === undefined)
+    ? null
+    : Math.max(0, (game.totalTime || 0) - runStart);
+
+    // 上一次完成研究的快照(完成研究按钮下方的第二行统计)
+    game.lastOriginRunTime = runTime;
+    game.lastOriginRunGain = gain;
+
+    // 成就"回归基础":本轮从未解锁过理论2~5 → 记下达成标记
+    // (理论上解锁过 → 不再判定;随后清零,开始下一轮的记录)
+    if(!game.theory25ThisRun)
+        game.basicOnlyOriginDone = true;
+
+    game.theory25ThisRun = false;
 
     // 本源按清零前的数据结算,结算完从这一刻开始给下一轮计时
     game.lastOriginResetTime =
@@ -1120,7 +1757,8 @@ function renderOriginPage(){
 
             div.innerHTML =
             "<span class=\"milestone-name\">" + m.name + "</span>" +
-            "<span class=\"milestone-val\">" + m.desc + "</span>";
+            "<span class=\"milestone-val\">" + m.desc +
+            (m.detail ? m.detail() : "") + "</span>";
 
         }else{
 
@@ -1192,6 +1830,45 @@ function refreshOriginStats(){
 
     originSetText("originLastRate", rateText);
 
+    // ---- 上一次完成研究的快照(静态数据,不随本轮变化)----
+    let prevTime =
+    game.lastOriginRunTime;
+
+    let prevGain =
+    game.lastOriginRunGain;
+
+    let prevTimeText =
+    "—";
+
+    let prevRateText =
+    "—";
+
+    let prevGainText =
+    "—";
+
+    if(prevTime !== null && prevTime !== undefined){
+
+        prevTimeText =
+        (typeof formatGameTime === "function")
+        ? formatGameTime(prevTime)
+        : Math.floor(prevTime) + " 秒";
+
+        if(prevGain !== null && prevGain !== undefined){
+
+            prevGainText = format(prevGain);
+
+            if(prevTime > 0)
+                prevRateText =
+                format(new Decimal(prevGain).mul(60).div(prevTime));
+
+        }
+
+    }
+
+    originSetText("originPrevElapsed", prevTimeText);
+    originSetText("originPrevRate", prevRateText);
+    originSetText("originPrevGain", prevGainText);
+
 }
 
 
@@ -1205,13 +1882,43 @@ function refreshOwnTheoryNumbers(){
 
     originSetText("ownTheoryPower", format(p));
     originSetText("ownTheoryRate", format(ownTheoryRate()));
-    originSetText("ownTheoryFormula", ownTheorySquared() ? "p^2" : "p");
+    originSetText("ownTheoryFormula", ownTheoryFormulaText());
+    originSetText("ownTheoryTargets", ownTheoryTargetText());
     originSetText("ownTheoryEffect", format(ownTheoryEffect()));
 
     originSetText("ownTheoremTotal", theoremTotal());
     originSetText("ownTheoremUnused", theoremUnused());
     originSetText("ownTheoremMult",
-        format(Decimal.pow(2, theoremUnused())));
+        format(Decimal.pow(ownTheoryTheoremMult(), theoremUnused())));
+
+    // ---- 时光之力(T(t))----
+    // 只有买过才显示这一行;t 每帧都在变,同样走轻量刷新
+    let timeKey =
+    ownTheoryTimePower();
+
+    let timeRow =
+    document.getElementById("ownTheoryTimeRow");
+
+    if(timeRow)
+        timeRow.style.display = timeKey ? "" : "none";
+
+    if(timeKey){
+
+        originSetText("ownTheoryTimeName",
+            timeKey === "timeFast" ? "迅速" : "持久");
+
+        originSetText("ownTheoryTimeFormula",
+            timeKey === "timeFast"
+            ? "min(1000, 90000/t)"
+            : "t");
+
+        originSetText("ownTheoryTimeValue",
+            format(ownTheoryTimeMult()));
+
+        originSetText("ownTheoryElapsed",
+            Math.floor(ownTheoryElapsed()));
+
+    }
 
     let t =
     theoremRecord();
@@ -1266,14 +1973,31 @@ function renderTheoremUpgrades(){
             OWN_THEORY_CONFIG.upgrades[i];
 
             let owned =
-            !!(game.theoremUpgrades
-                && game.theoremUpgrades[conf.key]);
+            theoremUpgradeOwned(conf.key);
+
+            // 锁定原因只由"已购买"决定,所以它在重建签名里是稳定的
+            let lock =
+            owned ? null : theoremUpgradeLockReason(conf.key);
 
             let div =
             document.createElement("div");
 
             div.className =
-            "theorem-card" + (owned ? " active" : "");
+            "theorem-card" + (owned ? " active" : (lock ? " locked" : ""));
+
+            let extra = "";
+
+            if(owned){
+
+                extra =
+                "<div class=\"theorem-owned\">已完成</div>";
+
+            }else if(lock){
+
+                extra =
+                "<div class=\"theorem-lock\">🔒 " + lock + "</div>";
+
+            }
 
             div.innerHTML =
             "<div class=\"theorem-head\">" +
@@ -1281,9 +2005,11 @@ function renderTheoremUpgrades(){
             "<span class=\"theorem-cost\">" + conf.cost + " 定理</span>" +
             "</div>" +
             "<div class=\"theorem-desc\">" + conf.desc + "</div>" +
+            extra +
             (owned
-                ? "<div class=\"theorem-owned\">已完成</div>"
-                : "<button class=\"theorem-btn\" data-key=\"" + conf.key + "\">" +
+                ? ""
+                : "<button class=\"theorem-btn\" data-key=\"" + conf.key + "\"" +
+                  (lock ? " data-lock=\"1\" disabled" : "") + ">" +
                   "购买(" + conf.cost + " 定理)</button>");
 
             box.appendChild(div);
@@ -1342,9 +2068,14 @@ function renderTheoremUpgrades(){
         let conf =
         theoremUpgradeConf(btn.getAttribute("data-key"));
 
-        if(conf)
-            btn.disabled =
-            theoremUnused() < conf.cost;
+        if(!conf)
+            continue;
+
+        // 条件不足(前置 / 互斥 / 升级数量)的按钮保持禁用
+        if(btn.getAttribute("data-lock") === "1")
+            btn.disabled = true;
+        else
+            btn.disabled = theoremUnused() < conf.cost;
 
     }
 
@@ -1366,10 +2097,13 @@ function renderOriginUpgrades(){
     if(!box)
         return;
 
+    // 结构签名 = 各升级等级 + "真·无尽阶梯"当前倍率
+    // (它的加成倍率随累计本源变化,倍率变了要刷新卡片上的"当前 ×N")
     let key =
     ORIGIN_UPGRADE_LIST.map(function(c){
         return originUpgradeLevel(c.key);
-    }).join(":");
+    }).join(":") +
+    ":st" + trueStaircaseMult().toString();
 
     if(key !== lastOriginUpgradeKey){
 
@@ -1410,14 +2144,25 @@ function renderOriginUpgrades(){
             if(isLevel && lv > 0){
 
                 extra =
-                "<div class=\"theorem-owned\">等级 " + lv +
-                " ｜ 合计:×" + format(deepOriginMult()) +
+                "<div class=\"theorem-owned\">等级 " + lv + " ｜ " +
+                (conf.activeText ? conf.activeText(lv) : "已购买") +
+                "</div>";
+
+            }else if(isLevel && conf.currentText){
+
+                // 还没升级的等级型升级:也把"当前值"写出来
+                // (底数提升这类升级,玩家需要知道自己现在的底数)
+                extra =
+                "<div class=\"theorem-owned\">" +
+                conf.currentText(0) +
                 "</div>";
 
             }else if(done){
 
                 extra =
-                "<div class=\"theorem-owned\">已购买</div>";
+                "<div class=\"theorem-owned\">" +
+                (conf.activeText ? conf.activeText(0) : "已购买") +
+                "</div>";
 
             }
 
