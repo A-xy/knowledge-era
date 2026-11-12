@@ -239,6 +239,8 @@
 <button class="exp-toggle" onclick="toggleExpCard('exp1Card')" data-page-node-id="CgAbtNgF82yvIrSP9LBgvE">收起</button>
 </div>
 
+<div class="exp-collapsed" id="exp1Collapsed"></div>
+
 <p class="exp-desc" data-page-node-id="Q2KzjgBbAOVczfr1OOfryE">
 目标元件的伏安特性函数 I=f(U) 是单调递增的。请通过测量某个 U 对应的 I,得到 I=1mA 时对应的电压 U_0(U_0 在 0~1V 范围内)。结果偏差小于 0.005V 后,完成本实验。
 </p>
@@ -276,6 +278,18 @@
 <div id="exp1Stats" data-page-node-id="ygSDsrHmKUP2I8dxLDgcNG">
 </div>
 
+<div class="exp-hint-row" id="exp1HintRow">
+<button class="exp-hint-btn" id="exp1HintBtn" onclick="expHintClick('exp1')">求助(5 AP)</button>
+</div>
+
+<details class="exp-hint-panel" id="exp1HintPanel" style="display:none">
+<summary>提示</summary>
+<div class="exp-hint-body">
+<p><b>简要描述</b>:有一个元件,电压越高,通过的电流越大。需要找出电流为 1 时的电压 V0(在 0~1 之间)。</p>
+<p><b>实验思路</b>:采用二分法,最初的答案区间为 [l,r]=[0,1],取这个区间的中点 mid=0.5 进行测量。如果结果大于 1,说明 V0 在 [l,mid] 范围内,否则在 [mid,r] 范围内。把区间更新为新的区间,继续进行二分,范围合适时提交答案即可。注意在误差较大时得到的结果可能不准确,这时需要升级设备,也可以在最近提交的答案附近尝试其它答案。</p>
+</div>
+</details>
+
 </div>
 
 <div class="exp-card" id="exp2Card" style="display:none" data-page-node-id="U0GqWm9sGbXbNQcSbSVQBg">
@@ -285,6 +299,8 @@
 <span id="exp2Status" class="exp-status" data-page-node-id="S6H937u9Ialc9NaG3hvM10">进行中</span>
 <button class="exp-toggle" onclick="toggleExpCard('exp2Card')" data-page-node-id="HY4KlhVdzW5UkLzxzly9Hz">收起</button>
 </div>
+
+<div class="exp-collapsed" id="exp2Collapsed"></div>
 
 <p class="exp-desc" data-page-node-id="8HxiYipL1sK1njFpICxZPP">
 一个周期未知的正弦波信号 s(t)=A·sin(2πt/T+φ) 持续产生,t 为解锁本实验以来的游戏时间。请通过多次测量不同时刻的信号值,推理出周期 T(T 在 60~120 秒之间)。结果偏差小于 0.5 秒后,完成本实验。
@@ -321,6 +337,20 @@
 <div id="exp2Stats" data-page-node-id="3lgm4Y2EDqdFyUfmXpd6wm">
 </div>
 
+<div class="exp-hint-row" id="exp2HintRow">
+<button class="exp-hint-btn" id="exp2HintBtn" onclick="expHintClick('exp2')">求助(25 AP)</button>
+</div>
+
+<details class="exp-hint-panel" id="exp2HintPanel" style="display:none">
+<summary>提示</summary>
+<div class="exp-hint-body">
+<p><b>简要描述</b>:一个振幅、周期、相位未知的正弦波,其中的时间是游戏中的时间。根据测量结果得到周期。</p>
+<p><b>实验思路</b>:</p>
+<p>方法1:由于正弦波的两个零点之间的时间差是周期的一半,因此可以间隔测量数据,在结果接近 0 时多测几次找到零点的大致位置,找到两个相邻的零点后可以得到结果。注意升级设备以提升准确度。</p>
+<p>方法2:可以试答案。本实验的评估标准是:当提交的答案与结果的差值分别低于 10 秒、3 秒、1 秒、0.5 秒时,分别得到低、中等、高、极高评价。所以只要从 60 秒开始试,每次增加 1 秒直到 120 秒,就能得到一个差值在 0.5 秒以内的结果。这个思路还可以继续优化,因为可以根据反馈的结果缩小范围。</p>
+</div>
+</details>
+
 </div>
 
 <div class="exp-card" id="exp3Card" style="display:none" data-page-node-id="hWjzJRXpaEdrUVrDz1GhoT">
@@ -330,6 +360,8 @@
 <span id="exp3Status" class="exp-status" data-page-node-id="WM34GH9RcGscImt7Zemloj"></span>
 <button class="exp-toggle" onclick="toggleExpCard('exp3Card')" data-page-node-id="19ITpXJoRunkObZJMDUU0A">收起</button>
 </div>
+
+<div class="exp-collapsed" id="exp3Collapsed"></div>
 
 <p class="exp-desc" data-page-node-id="BqAG5So5CJJh7jG7eiIx3l">
 已知损失函数（loss） L(x,y) 的值与两个参数 x,y 有关(x,y 在 0~1 范围内)。损失函数（loss）在某个 (x,y) 处取得最小值,且该位置唯一。请通过多次查询不同 (x,y) 的损失函数值,推断出使损失函数最小的 (x,y)。每次查询消耗 1000 行动点,返回该点的损失函数值(结果无误差,同时视为提交该 (x,y) 作为答案)。当提交的位置到最优点的距离小于 0.01 后,完成本实验。
@@ -354,6 +386,20 @@
 <div id="exp3Stats" data-page-node-id="O05TqcsKEiRnzkP25BVoME">
 </div>
 
+<div class="exp-hint-row" id="exp3HintRow">
+<button class="exp-hint-btn" id="exp3HintBtn" onclick="expHintClick('exp3')">求助(5000 AP)</button>
+</div>
+
+<details class="exp-hint-panel" id="exp3HintPanel" style="display:none">
+<summary>提示</summary>
+<div class="exp-hint-body">
+<p><b>简要描述</b>:一张 x、y 都在 0~1 的区域,每个坐标有一个高度。通过测量找到最低的点。</p>
+<p><b>实验思路</b>:如果在地上放一个球,它会滚到最低点。这是梯度下降法的思想。</p>
+<p>从某个初始点 (x,y) 开始,选取一个步长 Δ,对 (x±Δ, y±Δ) 进行测量。选择其中最低的一个作为新的 (x,y),重复这个过程。如果你发现所有 (x±Δ, y±Δ) 都比现在的 (x,y) 高,说明已经接近最低点了,这时候需要降低步长来提升精度。</p>
+<p>其实这样找到的只是极小值点(地上的“坑”的底部),但“坑”可能不止一个,所以不一定是最小值。不过这个实验的数据里极小值点是只有一个的,所以得到的就是最小值。</p>
+</div>
+</details>
+
 </div>
 
 <div class="exp-card" id="exp4Card" style="display:none" data-page-node-id="N14R8uTw6JmrOWcbGOacbC">
@@ -363,6 +409,8 @@
 <span id="exp4Status" class="exp-status" data-page-node-id="6QbuyFVklqQr6gJChEgPHS"></span>
 <button class="exp-toggle" onclick="toggleExpCard('exp4Card')" data-page-node-id="2ew7SF64SpsWFZ1oGKHLfl">收起</button>
 </div>
+
+<div class="exp-collapsed" id="exp4Collapsed"></div>
 
 <p class="exp-desc" data-page-node-id="I29w4Raip26BfdknmN0PlV">
 一个长度为 10 的 DNA 序列 S(由 A、T、C、G 组成)。每次测序操作可以测得其中某个位置随机的连续片段(片段在 S 中的实际位置未知)。请根据测序结果,复原 S 中尽量长的连续片段。提交的内容必须是 S 中的连续片段才有效。复原完整的 S 以完成本实验。
@@ -398,6 +446,18 @@
 
 <div id="exp4Stats" data-page-node-id="EvNN5HQWLCgYo88N8yKH4H">
 </div>
+
+<div class="exp-hint-row" id="exp4HintRow">
+<button class="exp-hint-btn" id="exp4HintBtn" onclick="expHintClick('exp4')">求助(5e5 AP)</button>
+</div>
+
+<details class="exp-hint-panel" id="exp4HintPanel" style="display:none">
+<summary>提示</summary>
+<div class="exp-hint-body">
+<p><b>简要描述</b>:有一串由 ATCG 组成的序列,每次测量会得到其中一个 n 个字母的连续片段。需要从片段中拼出这个序列。</p>
+<p><b>实验思路</b>:测量得到一个片段,作为基础。之后的测量中,如果得到的片段和当前片段有重叠部分,那么可以把它们拼起来,得到更长的片段(不过这个拼接不一定是实际情况,在 n 提高后得到实际情况的几率更高)。重复此过程即可。</p>
+</div>
+</details>
 
 </div>
 
@@ -440,6 +500,11 @@
 <p>本次可获得本源：<span id="originGainVal">0</span></p>
 
 <button id="originResetBtn" onclick="originReset()" disabled>完成研究</button>
+
+<div class="origin-confirm-row">
+<button id="originConfirmBtn" class="origin-confirm-btn" onclick="toggleOriginConfirmReset()">重置确认:开</button>
+<span id="originConfirmHint" class="origin-confirm-hint">点击「完成研究」时会先弹出确认窗口</span>
+</div>
 
 <p class="research-hint">
 本次研究已用 <span id="originLastElapsed">—</span>，本源获取速率为 <span id="originLastRate">—</span>/分钟
@@ -659,6 +724,18 @@
 </div>
 
 <div id="aboutChangelogPage" style="display:none">
+
+<div class="changelog-entry">
+<h3>V1.0.1 小更新 <span class="changelog-date">2026/11/12</span></h3>
+<ul>
+<li>实验新增了「求助」功能:每个实验都能花费行动点买到一次提示,内容包括实验目标的简述和可用的实验思路</li>
+<li>实验卡片收起后会显示当前获得的效果摘要,不用再展开就能看到重复完成带来的收益</li>
+<li>本源重置增加了确认开关,关掉之后点击「完成研究」会直接重置,不再弹出确认窗口</li>
+<li>修复了小于0.01的数值会显示成0.00的问题(比如自动实验助手的效率),现在这类数值改用科学计数法显示</li>
+<li>修复了无尽阶梯的重置次数超过一百万时没有用科学计数法显示的问题</li>
+<li>开局的引导剧情补充了两条说明:达到12想法即可重置获取行动点,以及实验遇到困难时可以求助</li>
+</ul>
+</div>
 
 <div class="changelog-entry">
 <h3>V1.0 追寻本源 <span class="changelog-date">2026/10/31</span></h3>

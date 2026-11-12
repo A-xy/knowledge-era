@@ -34,6 +34,9 @@ const EXPERIMENT1 = {
     upgradeCostBase: 5,     // 初始升级价格(行动点)
     upgradeCostMul: 2,      // 每次升级价格翻倍
     maxUpgrades: 6,         // 最多升级次数
+    // AP 消耗(与实验2~4 同一套字段名,实验求助的价格由此推导)
+    measureAP: 1,           // 测量消耗
+    submitAP: 1,            // 提交消耗
     // 完成判定
     completeThreshold: 0.005 // 偏差 < 0.005V 完成
 };
@@ -716,11 +719,11 @@ function exp1Measure(U){
         return "invalid";
 
     // 行动点校验
-    if(game.actionPoints.lt(1))
+    if(game.actionPoints.lt(EXPERIMENT1.measureAP))
         return "noAP";
 
     game.actionPoints =
-    game.actionPoints.sub(1);
+    game.actionPoints.sub(EXPERIMENT1.measureAP);
 
     // 真实值 + 高斯相对误差
     let trueI = exp1F(U, e.a, e.b, e.c);
@@ -790,11 +793,11 @@ function exp1Submit(U){
         return "invalid";
 
     // 行动点校验
-    if(game.actionPoints.lt(1))
+    if(game.actionPoints.lt(EXPERIMENT1.submitAP))
         return "noAP";
 
     game.actionPoints =
-    game.actionPoints.sub(1);
+    game.actionPoints.sub(EXPERIMENT1.submitAP);
 
     // 偏差
     let deviation =
@@ -1204,6 +1207,145 @@ function updateExperiment2Time(dt){
 // ============================================================
 
 // 切换实验卡片展开/收起
+// ============================================================
+// 实验求助(提示)
+//   给卡在某个实验上的玩家一个保底提示:花"测量一次的 5 倍"行动点解锁
+//   该实验的提示子面板。价格由各实验的测量消耗推导
+//   (EXP_HINT_CONFIG.multiple),不写死数值:5 / 25 / 5000 / 5e5 AP。
+//   解锁状态存 game.experiments[key].hintUnlocked:
+//   重新开始实验、研究重置、本源重置都不会清掉(玩家已经付过费)。
+// ============================================================
+const EXP_HINT_CONFIG = {
+    // 求助价格 = 该实验测量一次的 AP × 该倍数
+    multiple: 5
+};
+
+
+// 该实验测量一次的行动点消耗
+function expMeasureAP(key){
+
+    let v =
+    key === "exp1" ? EXPERIMENT1.measureAP
+    : key === "exp2" ? EXPERIMENT2.measureAP
+    : key === "exp3" ? EXPERIMENT3.lossAP
+    : key === "exp4" ? EXPERIMENT4.measureAP
+    : 0;
+
+    return new Decimal(v);
+
+}
+
+
+// 解锁该实验提示的价格
+function expHintCost(key){
+
+    return expMeasureAP(key)
+    .mul(EXP_HINT_CONFIG.multiple);
+
+}
+
+
+// 价格文案:5 / 25 / 5000 / 5e5
+// (≥1e5 用 5e5 这种写法,与实验4 的"测序(1e5 AP)"按钮保持一致)
+function expAPText(v){
+
+    let d = new Decimal(v);
+
+    if(d.lt(1e5))
+        return d.toString();
+
+    let exp =
+    Math.floor(d.log10().toNumber());
+
+    let mant =
+    d.div(Decimal.pow(10, exp)).toNumber();
+
+    return (Math.round(mant * 100) / 100) + "e" + exp;
+
+}
+
+
+// 该实验的提示是否已解锁
+function expHintUnlocked(key){
+
+    let e =
+    game.experiments ? game.experiments[key] : null;
+
+    return !!(e && e.hintUnlocked);
+
+}
+
+
+// 点击"求助":扣行动点 → 隐藏按钮 → 显示提示子面板
+function expHintClick(key){
+
+    let e =
+    game.experiments ? game.experiments[key] : null;
+
+    if(!e)
+        return;
+
+    ensureExpStats(e);
+
+    // 已解锁:不重复扣费
+    if(e.hintUnlocked)
+        return;
+
+    let cost =
+    expHintCost(key);
+
+    if(game.actionPoints.lt(cost))
+        return;
+
+    game.actionPoints =
+    game.actionPoints.sub(cost);
+
+    e.hintUnlocked = true;
+
+    saveGame();
+
+    renderExperimentPage();
+
+}
+
+
+// 求助按钮/提示面板的显隐与价格(每帧轻量同步,不重建 DOM)
+function renderExpHint(key){
+
+    let row =
+    document.getElementById(key + "HintRow");
+
+    let btn =
+    document.getElementById(key + "HintBtn");
+
+    let panel =
+    document.getElementById(key + "HintPanel");
+
+    let unlocked =
+    expHintUnlocked(key);
+
+    if(row)
+        row.style.display = unlocked ? "none" : "";
+
+    if(panel)
+        panel.style.display = unlocked ? "" : "none";
+
+    if(btn && !unlocked){
+
+        let cost =
+        expHintCost(key);
+
+        btn.innerText =
+        "求助(" + expAPText(cost) + " AP)";
+
+        btn.disabled =
+        game.actionPoints.lt(cost);
+
+    }
+
+}
+
+
 function toggleExpCard(cardId){
 
     let card =
@@ -1337,7 +1479,7 @@ function renderExperimentPage(){
 
     if(meBtn)
         meBtn.disabled =
-        game.actionPoints.lt(1);
+        game.actionPoints.lt(EXPERIMENT1.measureAP);
 
     // 提交按钮
     let subBtn =
@@ -1347,7 +1489,7 @@ function renderExperimentPage(){
 
     if(subBtn)
         subBtn.disabled =
-        game.actionPoints.lt(1);
+        game.actionPoints.lt(EXPERIMENT1.submitAP);
 
     // 最佳结果与加成
     renderExp1Result();
@@ -1382,6 +1524,12 @@ function renderExperimentPage(){
         "想法价格膨胀起始点延后 N+" + exp3Effect() + "(基础 N=10)");
     renderExpStats("exp4", "exp4Stats",
         "理论升级价格膨胀起始点延后 N+" + exp4Effect() + "(基础 N=5)");
+
+    // 实验求助按钮与提示子面板(四个实验各同步一次)
+    renderExpHint("exp1");
+    renderExpHint("exp2");
+    renderExpHint("exp3");
+    renderExpHint("exp4");
 
 }
 
@@ -1431,6 +1579,8 @@ function renderExpStats(key, boxId, firstEffectDesc){
 
         if(box.innerHTML !== "")
             box.innerHTML = "";
+
+        renderExpCollapsed(key, firstEffectDesc);
 
         return;
 
@@ -1507,6 +1657,73 @@ function renderExpStats(key, boxId, firstEffectDesc){
     }
 
     // 增量渲染:内容没变化时不重建 DOM(保持按钮稳定,避免点击丢失)
+    if(box.innerHTML !== html)
+        box.innerHTML = html;
+
+    // 收起状态下的摘要(首次完成效果 / 完成次数 / 重复完成效果)
+    renderExpCollapsed(key, firstEffectDesc);
+
+}
+
+
+// ============================================================
+// 卡片收起时的摘要
+//   收起不再把内容全藏掉,只保留这几行(CSS 只放行 .exp-collapsed):
+//     · 首次完成效果(始终显示)
+//     · 研究阶段3 里程碑:完成次数、重复完成效果(完成 ≥2 次才有意义)
+//   走增量渲染:内容没变化不重建,避免每帧抖动。
+// ============================================================
+function renderExpCollapsed(key, firstEffectDesc){
+
+    let box =
+    document.getElementById(
+        key + "Collapsed"
+    );
+
+    if(!box)
+        return;
+
+    let e =
+    game.experiments[key];
+
+    if(!e){
+
+        if(box.innerHTML !== "")
+            box.innerHTML = "";
+
+        return;
+
+    }
+
+    ensureExpStats(e);
+
+    let html =
+    "<p class=\"exp-hint\">首次完成效果:" +
+    firstEffectDesc +
+    "</p>";
+
+    // 研究阶段3:额外显示完成次数与重复完成效果
+    if(isMilestoneActive("stage3")){
+
+        let comp =
+        expCompletions(key);
+
+        html +=
+        "<p class=\"exp-hint\">完成次数:" +
+        format(comp) +
+        " 次</p>";
+
+        if(comp >= 2){
+
+            html +=
+            "<p class=\"exp-hint\">重复完成效果:" +
+            expMultiEffectText(key, comp) +
+            "</p>";
+
+        }
+
+    }
+
     if(box.innerHTML !== html)
         box.innerHTML = html;
 
@@ -2552,6 +2769,10 @@ function ensureExpStats(e){
     // 历史最佳提交(重新开始不重置,实验效果基于此保持)
     if(e.bestEver === undefined)
         e.bestEver = null;
+
+    // 实验求助(提示)是否已解锁(一次性购买,重新开始不清)
+    if(e.hintUnlocked === undefined)
+        e.hintUnlocked = false;
 
 }
 

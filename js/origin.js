@@ -312,6 +312,10 @@ function ensureOriginCompat(){
     if(game.originUnlocked === undefined)
         game.originUnlocked = false;
 
+    // 完成研究前的确认窗口(默认开;旧存档没有这个字段 → 补 true)
+    if(game.originConfirmReset === undefined)
+        game.originConfirmReset = true;
+
     // 历史最高研究阶段:旧存档至少取当前阶段
     if(game.maxResearchStage === undefined)
         game.maxResearchStage = game.researchStage || 0;
@@ -1423,6 +1427,30 @@ function baseNumberText(v){
 // ============================================================
 // 完成研究(本源重置)
 // ============================================================
+// 重置前是否弹出确认窗口(默认开;存 game.originConfirmReset)
+// 用 "!== false" 读取:旧存档没有这个字段时按默认(开)处理
+function originConfirmReset(){
+
+    return game.originConfirmReset !== false;
+
+}
+
+
+// 切换"重置时确认"(默认开)
+function toggleOriginConfirmReset(){
+
+    game.originConfirmReset =
+    !originConfirmReset();
+
+    if(typeof saveGame === "function")
+        saveGame();
+
+    // 按钮与提示文案由 renderOriginPage 里的轻量刷新负责
+    renderOriginPage();
+
+}
+
+
 // 返回是否真的执行了重置
 // 注意顺序:本源与完成次数先结算,本次重置就按新点亮的里程碑生效
 // (例如第 1 次重置后,实验直接以"已完成 1 次"的状态开始)
@@ -1432,9 +1460,11 @@ function originReset(auto){
         return false;
 
     // 手动点击时确认一次;自动触发(论文发表员)不打断玩家
+    // 玩家关掉"重置确认"后,手动点击也直接重置
     if(!auto
+        && originConfirmReset()
         && typeof confirm === "function"
-        && !confirm("完成研究将重置研究进度,确定继续吗?"))
+        && !confirm("完成研究将重置研究进度,确定继续吗?(可在按钮下方关闭此确认)"))
         return false;
 
     // ---- 1. 先结算本源与次数 ----
@@ -1694,6 +1724,48 @@ function renderOriginPage(){
         ready
         ? "完成研究"
         : "需要论文升级「结论」";
+
+    }
+
+    // ---- 重置确认开关(按钮 + 说明文案,逐帧轻量刷新) ----
+    let confirmBtn =
+    document.getElementById("originConfirmBtn");
+
+    let confirmHint =
+    document.getElementById("originConfirmHint");
+
+    if(confirmBtn || confirmHint){
+
+        let on =
+        originConfirmReset();
+
+        if(confirmBtn){
+
+            let label =
+            "重置确认:" + (on ? "开" : "关");
+
+            if(confirmBtn.innerText !== label)
+                confirmBtn.innerText = label;
+
+            let cls =
+            "origin-confirm-btn" + (on ? "" : " off");
+
+            if(confirmBtn.className !== cls)
+                confirmBtn.className = cls;
+
+        }
+
+        if(confirmHint){
+
+            let hint =
+            on
+            ? "点击「完成研究」时会先弹出确认窗口"
+            : "点击「完成研究」后立即重置,不再弹出确认窗口";
+
+            if(confirmHint.innerText !== hint)
+                confirmHint.innerText = hint;
+
+        }
 
     }
 

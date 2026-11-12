@@ -770,7 +770,7 @@ function milestoneDesc(m){
 
         return "所有实验助手速度 ×(1+研究重置次数/30) | 当前 ×" +
         format(endlessStaircaseBonus()) +
-        " (重置次数 " + endlessStaircaseResets() +
+        " (重置次数 " + format(endlessStaircaseResets()) +
         (unlimited ? "" : "/" + RESEARCH_CONFIG.endlessResetCap + " 封顶") +
         ")";
     }
@@ -2010,7 +2010,8 @@ function refreshHelperRates(box){
 
             if(rateEl){
 
-                // 效率数值统一走 format(超过 1e6 显示为科学计数法)
+                // 效率数值统一走 format
+                // (≥1e6 或 <0.01 都显示为科学计数法,极小效率不会变成 0.00)
                 rateEl.textContent = "效率:"
                 + format(a.enabled ? expAutoRate(key) : 0)
                 + " 完成/s";

@@ -1614,6 +1614,71 @@ cursor:not-allowed;
 }
 
 
+/* 完成研究按钮下方的"重置确认"开关 */
+.origin-confirm-row{
+
+margin-top:10px;
+
+display:flex;
+
+align-items:center;
+
+gap:10px;
+
+flex-wrap:wrap;
+
+}
+
+.origin-confirm-btn{
+
+background:#1a3a5e;
+
+border:1px solid #3a7ab8;
+
+color:#dbe8f6;
+
+padding:4px 12px;
+
+font-size:13px;
+
+border-radius:6px;
+
+cursor:pointer;
+
+}
+
+.origin-confirm-btn:hover{
+
+background:#24507e;
+
+}
+
+/* 关闭状态改成灰色,与"开着"一眼能区分 */
+.origin-confirm-btn.off{
+
+background:#2a2a2a;
+
+border-color:#555;
+
+color:#999;
+
+}
+
+.origin-confirm-btn.off:hover{
+
+background:#3a3a3a;
+
+}
+
+.origin-confirm-hint{
+
+color:#8899aa;
+
+font-size:13px;
+
+}
+
+
 /* ============================================================
    本源页:蓝色调(研究页是绿色,这里整体换成蓝,避免层级混淆)
    ============================================================ */
@@ -2315,9 +2380,90 @@ background:#122a22;
 
 }
 
-.exp-card.collapsed > *:not(.exp-head){
+/* 收起:隐藏除头部与"收起摘要"之外的所有内容 */
+.exp-card.collapsed > *:not(.exp-head):not(.exp-collapsed){
 
 display:none;
+
+}
+
+/* 展开时"收起摘要"不显示 */
+.exp-card:not(.collapsed) > .exp-collapsed{
+
+display:none;
+
+}
+
+.exp-collapsed{
+
+margin:4px 0 2px;
+
+}
+
+/* ===== 实验求助(提示) ===== */
+
+.exp-hint-row{
+
+margin:12px 0 2px;
+
+}
+
+.exp-hint-btn{
+
+background:#0e1d18;
+border:1px solid #2a6a4a;
+color:#7fd4a0;
+font-size:13px;
+padding:5px 14px;
+border-radius:6px;
+cursor:pointer;
+
+}
+
+.exp-hint-btn:hover{
+
+background:#122a22;
+
+}
+
+.exp-hint-btn:disabled{
+
+opacity:0.5;
+cursor:not-allowed;
+
+}
+
+.exp-hint-panel{
+
+margin:10px 0 2px;
+border:1px solid #2a6a4a;
+border-radius:8px;
+background:#0e1d18;
+padding:0 12px;
+
+}
+
+.exp-hint-panel summary{
+
+cursor:pointer;
+color:#7fd4a0;
+font-size:13px;
+padding:8px 0;
+
+}
+
+.exp-hint-body p{
+
+color:#bbb;
+font-size:13px;
+line-height:1.6;
+margin:6px 0 10px;
+
+}
+
+.exp-hint-body b{
+
+color:#9fd8c0;
 
 }
 
