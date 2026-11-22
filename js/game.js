@@ -65,7 +65,12 @@ theory6StorySeen:false,
 // refLegacyTheoryUnlocked    参考文献-引用旧理论  —— 理论1~5 的乘积 ^1.1
 // refTheory6Unlocked         参考文献-引用理论6   —— 理论6 的乘积 ^1.3
 // refExperimentUnlocked      参考文献-引用实验成果 —— 行动点公式指数 0.05 → 0.06
+//
+// paperRefined: 已精修的论文升级 { key: true }
+//   精修不消耗资源,只受文本能力点数的数量限制(见 ability.js)
+//   升级被重置/清空时,对应的精修标记一起清掉
 frontierActive:false,
+paperRefined:{},
 inspiration:new Decimal(0),
 summaryUnlocked:false,
 introUnlocked:false,
@@ -121,7 +126,21 @@ ownTheoryStorySeen:false,
 // multiPaper    : 多元论文(一次性)
 // trueStaircase : 真·无尽阶梯(一次性)
 // deepOrigin    : 深入本源(可无限升级,存等级)
+// timeStair     : 时光之力·阶梯(一次性;取消无尽阶梯II 上限 + 每秒加完成研究次数)
 originUpgrades:{},
+
+// "时光之力·阶梯"每秒 +N 次完成研究攒下的小数余额
+stairTimeAcc:0,
+
+// 能力试炼(本源页第四个子页;购买本源升级「自我提升」后解锁)
+// abilities   : 各能力已完成的试炼次数(同时就是能力等级,上限 5)
+//               { compress: 抗压能力, text: 文本能力 }
+// abilityTrial: 正在进行的试炼 { key:<compress|text>, startTime:<游戏时间> }
+//               为 null 时表示不在试炼中(进入/退出试炼都会做一次本源重置)
+// abilityTrialStorySeen: 首次获得「自我提升」后的剧情已看过
+abilities:{ compress:0, text:0 },
+abilityTrial:null,
+abilityTrialStorySeen:false,
 
 // 成就系统:已达成成就登记 { id: true }
 achievements:{},
@@ -347,6 +366,19 @@ const PERMA_UNLOCK_LIST = [
         key: "ownTheory",
         test: function(){
             return (game.originResets || 0) >= 1;
+        }
+    },
+
+    // 能力试炼:买下本源升级「自我提升」后解锁
+    // (「关于→游戏介绍」的"能力试炼"主题;本源升级不会被重置,解锁即永久)
+    {
+        key: "ability",
+        test: function(){
+            if(typeof abilityUnlocked === "function"
+                && abilityUnlocked())
+                return true;
+            return !!(game.originUpgrades
+                && game.originUpgrades.selfImprove);
         }
     }
 

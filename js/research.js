@@ -130,6 +130,42 @@ function nextStageIdeas(){
 }
 
 
+// 成就「完美挑战者」(完成一个能力试炼 5 次)解锁的功能:
+// 研究阶段随想法数自动提升,不再需要研究重置
+function autoResearchStageUnlocked(){
+
+    return (typeof isAchievementUnlocked === "function")
+    && isAchievementUnlocked("perfectChallenger");
+
+}
+
+
+// 每 tick:想法数达到下一阶段需求时自动提升研究阶段
+// 只改阶段,不做研究重置(不获得行动点,也不清空知识/理论/想法/元-力量)
+function updateAutoResearchStage(){
+
+    if(!autoResearchStageUnlocked())
+        return false;
+
+    let upgraded = false;
+
+    // 兜底:阶段需求随阶段递增,正常不会跑满
+    let guard = 0;
+
+    while(guard < 1000
+        && game.ideas >= nextStageIdeas()){
+
+        game.researchStage++;
+        guard++;
+        upgraded = true;
+
+    }
+
+    return upgraded;
+
+}
+
+
 // 行动点获取的"基础值":只由知识决定(含最低值限制)
 // 公式:5 * (Knowledge / 1e72)^指数,最低 5
 // 指数默认 0.05(RESEARCH_CONFIG.actionExp)
@@ -175,6 +211,7 @@ function stageAPBase(){
 
 // 自动实验助手的升级底数(初始 2)
 // 本源升级「底数提升2」每级 +0.2 → 2.2 / 2.4 / …
+// 能力「领导力」把每级的效果放大到 ×(1+领导力)(领导力试炼中失效 → ×1)
 function expAssistantBase(){
 
     let lv =
@@ -182,8 +219,13 @@ function expAssistantBase(){
     ? originUpgradeLevel("expBaseBoost")
     : 0;
 
+    let mult =
+    (typeof leadershipEffectMult === "function")
+    ? leadershipEffectMult()
+    : 1;
+
     return RESEARCH_CONFIG.expAssistantBase
-    + RESEARCH_CONFIG.expAssistantBaseStep * lv;
+    + RESEARCH_CONFIG.expAssistantBaseStep * lv * mult;
 
 }
 
@@ -213,17 +255,25 @@ function actionPointsStageExp(){
 
 // 本次研究重置可获得的行动点(基于当前知识)
 //   = 基础值 × 里程碑stage2倍数 × 效果6(引言·行动点加成)
+// 细心试炼:各项加成算完之后整体开平方
 // 最终向下取整
 function actionPointsGain(){
 
-    return actionPointsBase()
+    let gain =
+    actionPointsBase()
     .mul(actionPointsStageMultiplier())
     // 效果6(引言·行动点加成):×(1+MetaPower)^0.1
     .mul(metaAPBonus())
     // 本源层"你的理论":行动点获取 ×Effect
     // (只有买了「推广理论II」才生效,否则 ×1)
-    .mul(ownTheoryAPEffect())
-    .floor();
+    .mul(ownTheoryAPEffect());
+
+    // 细心试炼:所有加成算完之后再开方
+    if(typeof carefulTrialSqrt === "function"
+        && carefulTrialSqrt())
+        gain = gain.sqrt();
+
+    return gain.floor();
 
 }
 
@@ -473,6 +523,17 @@ function applyResearchResetCore(gainAP, advanceStage){
 // 前沿领域:想法达标时同样走这里,不足 12 想法则完全不计入任何数据
 function recordResearchReset(){
 
+    // 细心试炼:试炼内的重置只计入试炼次数,不计入研究重置次数
+    // (因此不会推动任何"按重置次数"的加成,也不刷新最快用时 / 高速研究)
+    if(typeof trialActive === "function" && trialActive("careful")){
+
+        if(typeof recordTrialResearchReset === "function")
+            recordTrialResearchReset();
+
+        return;
+
+    }
+
     // 研究重置次数 +1
     game.researchResets++;
 
@@ -618,7 +679,11 @@ function renderResearchPage(){
             "<p>到下个研究阶段需要:" +
             "<b>" + nextStageIdeas() + " 想法</b></p>" +
             "<p>当前想法:" +
-            "<b>" + game.ideas + " / " + nextStageIdeas() + "</b></p>";
+            "<b>" + game.ideas + " / " + nextStageIdeas() + "</b></p>" +
+            // 成就「完美挑战者」:阶段随想法数自动提升
+            (autoResearchStageUnlocked()
+                ? "<p>研究阶段随想法数自动提升中(不需要研究重置)</p>"
+                : "");
 
         }
 
@@ -987,9 +1052,114 @@ function toggleAssistant(key){
 
     a.enabled = !a.enabled;
 
+    // 助手提拔员:总开关同时开/关四个分开关
+    if(key === "promotor")
+        syncPromotorSubs(a.enabled);
+
     saveGame();
 
     renderResearchHelpers();
+
+}
+
+
+// ============================================================
+// 助手提拔员的分开关(成就「无限实验」解锁)
+// 四个开关分别控制是否自动升级实验1~4的自动助手
+// (领导力试炼里需要"只升级某一个"时用)。
+// 总开关仍在:切换总开关时四个分开关一起变成同一状态。
+// 未解锁该成就时一律视为全部开启,行为与解锁前一致。
+// ============================================================
+const PROMOTOR_SUB_KEYS = ["expAuto1", "expAuto2", "expAuto3", "expAuto4"];
+
+
+// 分开关是否已解锁
+function promotorSubUnlocked(){
+
+    return (typeof isAchievementUnlocked === "function")
+    && isAchievementUnlocked("endlessExperiment");
+
+}
+
+
+// 分开关状态表(缺失的键按"开"补齐)
+function promotorSubMap(){
+
+    let a =
+    (game.assistants)
+    ? game.assistants["promotor"]
+    : null;
+
+    if(!a)
+        return null;
+
+    if(!a.autoUpgrade || typeof a.autoUpgrade !== "object")
+        a.autoUpgrade = {};
+
+    for(let i = 0; i < PROMOTOR_SUB_KEYS.length; i++){
+
+        let k =
+        PROMOTOR_SUB_KEYS[i];
+
+        if(a.autoUpgrade[k] === undefined)
+            a.autoUpgrade[k] = true;
+
+    }
+
+    return a.autoUpgrade;
+
+}
+
+
+// 这个自动实验助手是否允许被提拔员自动升级
+function promotorSubEnabled(expAutoKey){
+
+    if(!promotorSubUnlocked())
+        return true;
+
+    let map =
+    promotorSubMap();
+
+    if(!map)
+        return true;
+
+    return map[expAutoKey] !== false;
+
+}
+
+
+// 设置单个分开关
+function setPromotorSub(expAutoKey, on){
+
+    if(!promotorSubUnlocked())
+        return;
+
+    let map =
+    promotorSubMap();
+
+    if(!map)
+        return;
+
+    map[expAutoKey] = !!on;
+
+    saveGame();
+
+    renderResearchHelpers();
+
+}
+
+
+// 四个分开关一起设置(总开关切换时用)
+function syncPromotorSubs(on){
+
+    let map =
+    promotorSubMap();
+
+    if(!map)
+        return;
+
+    for(let i = 0; i < PROMOTOR_SUB_KEYS.length; i++)
+        map[PROMOTOR_SUB_KEYS[i]] = !!on;
 
 }
 
@@ -1580,10 +1750,17 @@ function expAutoBaseRate(key){
         || e.bestOperations === undefined)
         return 0;
 
-    return 0.1 / Math.max(
+    // 操作次数为 0(旧存档异常数据)时 0.1/0 会变 Infinity,直接按 0 处理
+    let ops =
+    Math.max(
         e.bestOperations,
         conf.optimalOps
     );
+
+    if(!(ops > 0))
+        return 0;
+
+    return 0.1 / ops;
 
 }
 
@@ -1591,30 +1768,45 @@ function expAutoBaseRate(key){
 // 当前速率 = 基础速率 × 升级底数^等级 × 元-力量效果5(引言·实验助手加成)
 //                                 × 论文升级"实验导向"加成
 //                                 × 里程碑"无尽阶梯"(阶段9)
-// (未启用返回 0)
+// 返回 Decimal(未启用返回 0):底数^等级 与各乘数都可能超过 1e308,
+// 用 Number 相乘会变成 Infinity,进而污染实验完成次数
 function expAutoRate(key){
 
     let conf =
     expAutoConf(key);
 
     if(!conf)
-        return 0;
+        return new Decimal(0);
 
     let a =
     game.assistants[key];
 
     if(!a || !a.unlocked || !a.enabled)
-        return 0;
+        return new Decimal(0);
 
     // 效果5:所有实验助手的速度 ×(1+MetaPower)^0.05
     // 论文升级"实验导向":×(1+实验完成次数总和)^0.2
     // 里程碑"无尽阶梯":×(1+研究重置次数/30,最大300次)
     // 升级底数:默认 2(每级 ×2),本源升级「底数提升2」可提高
-    return expAutoBaseRate(key)
-    * Math.pow(expAssistantBase(), a.level || 0)
-    * metaExpAssistantBonus().toNumber()
-    * experimentOrientedBonus().toNumber()
-    * endlessStaircaseBonus().toNumber();
+    // 领导力试炼:升级过别的助手后,这个助手会被降效(÷(2+领导力))^次数
+    return new Decimal(expAutoBaseRate(key))
+    .mul(
+        Decimal.pow(expAssistantBase(), a.level || 0)
+    )
+    .mul(metaExpAssistantBonus())
+    .mul(experimentOrientedBonus())
+    .mul(endlessStaircaseBonus())
+    // 你的理论「推广理论III」:×Effect(未购买时为 ×1)
+    .mul(
+        (typeof ownTheoryExpAssistantEffect === "function")
+        ? ownTheoryExpAssistantEffect()
+        : 1
+    )
+    .mul(
+        (typeof leadershipAssistantPenalty === "function")
+        ? leadershipAssistantPenalty(key)
+        : 1
+    );
 
 }
 
@@ -1685,6 +1877,11 @@ function upgradeExpAutoAssistant(key){
     if(!conf || !a || !a.unlocked)
         return "locked";
 
+    // 综合能力试炼:无法升级自动实验助手
+    if(typeof comprehensiveAssistantBlocked === "function"
+        && comprehensiveAssistantBlocked())
+        return "trial";
+
     let cost =
     expAutoUpgradeCost(key);
 
@@ -1696,6 +1893,10 @@ function upgradeExpAutoAssistant(key){
 
     a.level =
     (a.level || 0) + 1;
+
+    // 领导力试炼:升级后其它助手效率下降
+    if(typeof applyLeadershipUpgradePenalty === "function")
+        applyLeadershipUpgradePenalty(key);
 
     saveGame();
 
@@ -1720,6 +1921,11 @@ function promoteExpAssistants(){
     if(!isAssistantEnabled("promotor"))
         return false;
 
+    // 综合能力试炼:无法升级自动实验助手(提拔员同样被挡住)
+    if(typeof comprehensiveAssistantBlocked === "function"
+        && comprehensiveAssistantBlocked())
+        return false;
+
     let upgraded = false;
 
     for(let i = 0; i < ASSISTANT_LIST.length; i++){
@@ -1727,6 +1933,10 @@ function promoteExpAssistants(){
         let conf = ASSISTANT_LIST[i];
 
         if(!conf.expKey)
+            continue;
+
+        // 分开关(成就「无限实验」):关掉的实验不自动升级
+        if(!promotorSubEnabled(conf.key))
             continue;
 
         let a = game.assistants[conf.key];
@@ -1746,6 +1956,10 @@ function promoteExpAssistants(){
 
             a.level =
             (a.level || 0) + 1;
+
+            // 领导力试炼:自动升级同样会让其它助手降效
+            if(typeof applyLeadershipUpgradePenalty === "function")
+                applyLeadershipUpgradePenalty(conf.key);
 
             upgraded = true;
 
@@ -1782,7 +1996,7 @@ function updateExpAutoAssistants(dt){
         let rate =
         expAutoRate(conf.key);
 
-        if(rate <= 0)
+        if(rate.lte(0))
             continue;
 
         let e =
@@ -1791,10 +2005,11 @@ function updateExpAutoAssistants(dt){
         if(!e)
             continue;
 
-        if(e.completions === undefined)
-            e.completions = 0;
+        // completions 是 Decimal(可超过 1e308);用 number 累加到顶会变 Infinity
+        ensureExpStats(e);
 
-        e.completions += rate * dt;
+        e.completions =
+        e.completions.add(rate.mul(dt));
 
     }
 
@@ -1861,14 +2076,20 @@ function refreshHelperButtons(card, conf, a){
 
         if(btn){
 
+            let blocked =
+            (typeof comprehensiveAssistantBlocked === "function")
+            && comprehensiveAssistantBlocked();
+
             let cost =
             expAutoUpgradeCost(conf.key);
 
             btn.disabled =
-            game.actionPoints.lt(cost);
+            blocked || game.actionPoints.lt(cost);
 
             let label =
-            "升级(" + format(cost) + " AP)";
+            blocked
+            ? "试炼中无法升级"
+            : ("升级(" + format(cost) + " AP)");
 
             if(btn.textContent !== label)
                 btn.textContent = label;
@@ -2119,7 +2340,17 @@ function renderResearchHelpers(){
         //   放进签名会让整张列表在"助手提拔员每 tick 升级"或"玩家刚改完设置"时重建,
         //   正在输入的阈值输入框会被替换 → 输入被吞(论文发表员/研究总结员都中招)。
         //   这些值改由 syncHelperInputs() 轻量刷新。
-        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.mode || "") + ":" + assistantModeList(key).join(",") + ";";
+        // 助手提拔员的分开关状态(按钮上的"开/关"文字会变 → 进签名)
+        let subStr = "";
+
+        if(key === "promotor" && promotorSubUnlocked()){
+
+            for(let s = 0; s < PROMOTOR_SUB_KEYS.length; s++)
+                subStr += promotorSubEnabled(PROMOTOR_SUB_KEYS[s]) ? "1" : "0";
+
+        }
+
+        stateStr += key + ":" + (a.unlocked ? 1 : 0) + (a.enabled ? 1 : 0) + ":" + (a.mode || "") + ":" + assistantModeList(key).join(",") + ":" + subStr + ";";
     }
 
     // 结构没变 → 不重建卡片,只刷新"效率"数值文本
@@ -2209,6 +2440,36 @@ function renderResearchHelpers(){
                 "<button class=\"assistant-btn toggle\" data-key=\"" + conf.key + "\">" +
                 (a.enabled ? "开" : "关") +
                 "</button>";
+
+                // 助手提拔员的分开关(成就「无限实验」解锁):
+                // 分别控制是否自动升级实验1~4的自动助手
+                if(conf.key === "promotor" && promotorSubUnlocked()){
+
+                    html +=
+                    "<div class=\"assistant-sub\">";
+
+                    for(let s = 0; s < PROMOTOR_SUB_KEYS.length; s++){
+
+                        let sk =
+                        PROMOTOR_SUB_KEYS[s];
+
+                        let on =
+                        promotorSubEnabled(sk);
+
+                        html +=
+                        "<button class=\"assistant-btn sub" + (on ? " on" : "") + "\" " +
+                        "data-exp=\"" + sk + "\">" +
+                        "实验" + (s + 1) + ":" + (on ? "开" : "关") +
+                        "</button>";
+
+                    }
+
+                    html +=
+                    "</div>" +
+                    "<div class=\"assistant-desc\">分开关只控制该实验助手是否被自动升级;" +
+                    "总开关切换时会同时开关这四个开关</div>";
+
+                }
 
                 // 触发条件设置(阈值 / 倍数 / 时间,按已解锁的模式显示)
                 if(conf.threshold){
@@ -2356,6 +2617,21 @@ function renderResearchHelpers(){
                 if(cls.contains("mode")){
                     cycleAssistantMode(key);
                     return;
+                }
+
+                // 助手提拔员的分开关(data-exp 指向对应的自动实验助手)
+                if(cls.contains("sub")){
+
+                    let sk =
+                    (target.dataset && target.dataset.exp)
+                    ? target.dataset.exp
+                    : "";
+
+                    if(sk)
+                        setPromotorSub(sk, !promotorSubEnabled(sk));
+
+                    return;
+
                 }
 
                 // 升级按钮

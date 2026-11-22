@@ -141,11 +141,47 @@ function getTheoryPrice(id){
 }
 
 
-// 价格指数 f(x,p) = p.A*x + p.B*max(x-p.N,0)^2
+// 价格指数 f(x,p) = p.A*x + (p.B / 理解力除数)*max(x-p.N,0)^2
 // 实验4(exp4Effect)使二次项起始点延后:N 变大 → 价格膨胀延后
+// 理解力(能力试炼):二次项系数 B 除以 1+理解力×0.2 → 膨胀变慢
 function priceExponent(x, p){
     let over = Math.max(x - (p.N + exp4Effect()), 0);
-    return p.A * x + p.B * over * over;
+    return p.A * x + (p.B / theoryBDivisor()) * over * over;
+}
+
+
+// 二次项系数 B 的除数(理解力;未解锁能力层时为 1)
+function theoryBDivisor(){
+
+    return (typeof comprehensionDivisor === "function")
+    ? comprehensionDivisor()
+    : 1;
+
+}
+
+
+// 理解力试炼:解锁和升级所有理论花费的知识变为 3 次方
+function theoryCostCubed(){
+
+    return (typeof trialActive === "function")
+    && trialActive("comprehension");
+
+}
+
+
+// 解锁某个理论需要花费的知识(理解力试炼中变为 3 次方)
+function theoryUnlockCost(id){
+
+    let data =
+    theoryData[id];
+
+    let cost =
+    data.cost;
+
+    return theoryCostCubed()
+    ? cost.pow(3)
+    : cost;
+
 }
 
 
@@ -162,10 +198,16 @@ function theoryUpgradeCost(id){
     let exp =
     priceExponent(t.level, p);
 
-    return new Decimal(p.BASE)
+    let cost =
+    new Decimal(p.BASE)
     .mul(
         Decimal.pow(10, exp)
     );
+
+    return theoryCostCubed()
+    ? cost.pow(3)
+    : cost;
+
 }
 
 
@@ -206,6 +248,13 @@ function theoryVisible(id){
         id.replace("theory","")
     );
 
+    // 试炼对理论的限制:
+    //   创造力试炼 → 只有理论 1~x 可用(x = 5-创造力,至少 1)
+    //   综合能力试炼 → 只有理论 1 可用
+    if(typeof trialTheoryBlocked === "function"
+        && trialTheoryBlocked(num))
+        return false;
+
     // 拓展理论:需先在前沿领域中发现,且前置理论已解锁
     if(num === 6)
         return theory6Unlocked()
@@ -230,13 +279,18 @@ function theoryVisible(id){
 // 注意:拓展理论(理论6)在前沿领域内**可用** —— 只有 2~5 失效
 function theoryDisabled(id){
 
-    if(!frontierActive())
-        return false;
-
     let num =
     Number(
         id.replace("theory","")
     );
+
+    // 试炼对理论的限制(创造力 / 综合能力)
+    if(typeof trialTheoryBlocked === "function"
+        && trialTheoryBlocked(num))
+        return true;
+
+    if(!frontierActive())
+        return false;
 
     return num >= 2 && num <= 5;
 
@@ -258,10 +312,10 @@ function unlockTheory(id){
     if(theoryDisabled(id))
         return;
 
-    if(game.knowledge.gte(data.cost)){
+    if(game.knowledge.gte(theoryUnlockCost(id))){
 
         game.knowledge =
-        game.knowledge.sub(data.cost);
+        game.knowledge.sub(theoryUnlockCost(id));
 
         t.unlocked=true;
 
@@ -685,8 +739,12 @@ function renderTheories(){
         //==================
         if(!t.unlocked){
 
+            // 理解力试炼里解锁花费会变成 3 次方 → 价格变了也要重建
+            let lockedMode =
+            theoryCostCubed() ? "locked:cube" : "locked";
+
             // 卡片已存在且状态未变,无需重建
-            if(div && div.dataset.mode === "locked")
+            if(div && div.dataset.mode === lockedMode)
                 continue;
 
             if(!div){
@@ -696,7 +754,7 @@ function renderTheories(){
                 box.appendChild(div);
             }
 
-            div.dataset.mode = "locked";
+            div.dataset.mode = lockedMode;
 
             div.innerHTML = `
 
@@ -706,7 +764,7 @@ function renderTheories(){
 
             <span class="cost">
             解锁需要：
-            ${format(data.cost)}
+            ${format(theoryUnlockCost(id))}
             </span>
 
             <button data-theory="${id}" data-action="unlock">

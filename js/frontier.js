@@ -19,6 +19,12 @@
 //   第4行(实验部分) —— 四选一,可整行重置
 //   第5行(结论)     —— 占位,效果待定
 //   第6行(参考文献) —— 三选一,可整行重置
+//
+// 精修(完成文本能力试炼后解锁,见 ability.js):
+//   已完成的论文升级可以占用一个"精修名额"换成强化版效果,
+//   不消耗任何资源;名额 = 文本能力点数(最多 5 个)。
+//   升级被重置 / 清空时,对应的精修标记一起清掉。
+//   强化后的文本见各升级的 refinedDesc,数值走 paperRefineActive() 分支。
 // ============================================================
 
 
@@ -55,14 +61,17 @@ const FRONTIER_CONFIG = {
             name: "摘要",
             row: 1,
             cost: new Decimal("1e36"),
-            desc: "基于灵感,提高知识边界(知识边界 × sqrt(1+灵感))"
+            desc: "基于灵感,提高知识边界(知识边界 × sqrt(1+灵感))",
+            // 精修后的描述(文本能力试炼解锁;显示为金色)
+            refinedDesc: "基于灵感,提高知识边界(知识边界 × (1+灵感)^(2/3))"
         },
         {
             key: "intro",
             name: "引言",
             row: 2,
             cost: new Decimal("1e50"),
-            desc: "解锁新的元-力量效果"
+            desc: "解锁新的元-力量效果",
+            refinedDesc: "解锁更多新的元-力量效果"
         },
         {
             key: "legacyTheory",
@@ -75,7 +84,9 @@ const FRONTIER_CONFIG = {
                 value: new Decimal("1e16"),
                 label: "1e16 累计行动点"
             },
-            desc: "元-力量的第二个效果提升(取 2 + 0.02·ln(MetaPower+1)² 与原值的较大值)"
+            desc: "元-力量的第二个效果提升(取 2 + 0.02·ln(MetaPower+1)² 与原值的较大值)",
+            refinedDesc: "元-力量的第二个效果提升(取 2 + 0.02·ln(MetaPower+1)² 与原值的较大值)," +
+            "元-力量的第三个效果也提升(变为 (1+MetaPower)^(1/3))"
         },
         {
             key: "experimentOriented",
@@ -87,14 +98,16 @@ const FRONTIER_CONFIG = {
                 value: 10000,
                 label: "10000 实验完成次数总和"
             },
-            desc: "基于实验完成次数总和,提升所有实验助手的速度"
+            desc: "基于实验完成次数总和,提升所有实验助手的速度",
+            refinedDesc: "基于实验完成次数总和,更多地提升所有实验助手的速度(公式改为 (1+完成总数)^(1/4))"
         },
         {
             key: "innovation",
             name: "理论部分-注重创新",
             row: 3,
             cost: new Decimal("1e135"),
-            desc: "灵感提升知识获取"
+            desc: "灵感提升知识获取",
+            refinedDesc: "灵感更多地提升知识获取(公式改为 (1+灵感)^(1/3))"
         },
         {
             key: "refExp1",
@@ -108,7 +121,9 @@ const FRONTIER_CONFIG = {
                 value: 1e13,
                 label: "1e13 实验1完成次数"
             },
-            desc: "实验1的首次完成效果变为2倍(其中的额外加成部分 ×2)"
+            desc: "实验1的首次完成效果变为2倍(其中的额外加成部分 ×2)",
+            refinedDesc: "实验1的首次完成效果变为2倍(其中的额外加成部分 ×2)," +
+            "并且重复完成效果也^2"
         },
         {
             key: "refExp2",
@@ -121,7 +136,9 @@ const FRONTIER_CONFIG = {
                 value: 1e11,
                 label: "1e11 实验2完成次数"
             },
-            desc: "实验2的首次完成效果变为2倍(其中的额外加成部分 ×2)"
+            desc: "实验2的首次完成效果变为2倍(其中的额外加成部分 ×2)",
+            refinedDesc: "实验2的首次完成效果变为2倍(其中的额外加成部分 ×2)," +
+            "并且重复完成效果也×2"
         },
         {
             key: "refExp3",
@@ -134,7 +151,9 @@ const FRONTIER_CONFIG = {
                 value: 1e11,
                 label: "1e11 实验3完成次数"
             },
-            desc: "实验3的首次完成效果变为2倍(其中的额外加成部分 ×2)"
+            desc: "实验3的首次完成效果变为2倍(其中的额外加成部分 ×2)",
+            refinedDesc: "实验3的首次完成效果变为2倍(其中的额外加成部分 ×2)," +
+            "并且重复完成效果也^2"
         },
         {
             key: "refExp4",
@@ -147,7 +166,9 @@ const FRONTIER_CONFIG = {
                 value: 1e11,
                 label: "1e11 实验4完成次数"
             },
-            desc: "实验4的首次完成效果变为2倍(其中的额外加成部分 ×2)"
+            desc: "实验4的首次完成效果变为2倍(其中的额外加成部分 ×2)",
+            refinedDesc: "实验4的首次完成效果变为2倍(其中的额外加成部分 ×2)," +
+            "并且重复完成效果也^2"
         },
         {
             // 承接整篇论文:全部条件达成后才能编写,解锁下一个层级(效果待实装)
@@ -171,7 +192,9 @@ const FRONTIER_CONFIG = {
                     label: "其余各行均已完成"
                 }
             ],
-            desc: "解锁本源层(里程碑 / 你的理论 / 本源升级)"
+            desc: "解锁本源层(里程碑 / 你的理论 / 本源升级)",
+            // 结论是本源层的入口,不参与精修(也不占精修名额)
+            canRefine: false
         },
         {
             key: "refLegacyTheory",
@@ -179,23 +202,30 @@ const FRONTIER_CONFIG = {
             row: 6,
             resetRow: true,
             cost: new Decimal("1e580"),
-            desc: "理论1~5对知识的加成提高到 1.1 次方"
+            desc: "理论1~5对知识的加成提高到 1.1 次方",
+            refinedDesc: "理论1~5对知识的加成提高到 1.2 次方"
         },
         {
             key: "refTheory6",
             name: "参考文献-引用理论6",
             row: 6,
             cost: new Decimal("1e580"),
-            desc: "理论6对知识的加成提高到 1.3 次方"
+            desc: "理论6对知识的加成提高到 1.3 次方",
+            refinedDesc: "理论6对知识的加成提高到 1.5 次方"
         },
         {
             key: "refExperiment",
             name: "参考文献-引用实验成果",
             row: 6,
             cost: new Decimal("1e580"),
-            desc: "行动点获取公式的指数由 0.05 提升到 0.06"
+            desc: "行动点获取公式的指数由 0.05 提升到 0.06",
+            refinedDesc: "行动点获取公式的指数由 0.05 提升到 0.07"
         }
-    ]
+    ],
+
+    // 精修"参考文献-引用实验成果"后的行动点公式指数
+    // (普通购买为 RESEARCH_CONFIG.actionExpRef = 0.06)
+    refineActionExp: 0.07
 };
 
 
@@ -221,6 +251,20 @@ function ensurePaperCompat(){
 
         if(game[key] === undefined)
             game[key] = false;
+
+    }
+
+    // 精修标记(老存档没有这个字段)
+    paperRefineMap();
+
+    // 已经不在手上的升级不该保留精修(文本试炼清空 / 重置行 / 改存档)
+    for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+
+        let key =
+        FRONTIER_CONFIG.papers[i].key;
+
+        if(!paperOwned(key))
+            delete game.paperRefined[key];
 
     }
 
@@ -356,6 +400,10 @@ function paperRowBlocked(p){
     if(owned.length === 0)
         return false;
 
+    // 本源升级"包罗万象":整行不再有互斥,谁都能买
+    if(originUpgradeActive("allPapers"))
+        return false;
+
     if(!originUpgradeActive("multiPaper"))
         return true;
 
@@ -391,6 +439,11 @@ function paperBuyState(p){
 
     if(!paperRequireMet(p))
         return { ok: false, reason: "require" };
+
+    // 文本能力试炼:论文升级数量上限
+    if(typeof trialPaperBlocked === "function"
+        && trialPaperBlocked(p.key))
+        return { ok: false, reason: "trialpaper" };
 
     if(frontierInspiration().lt(p.cost))
         return { ok: false, reason: "noinspiration" };
@@ -457,7 +510,7 @@ function paperRequireMetOne(r, p){
         ).gte(r.value);
 
     if(r.type === "expCompletions")
-        return paperRequireCurrent(r) >= r.value;
+        return paperRequireCurrent(r).gte(r.value);
 
     if(r.type === "researchStage")
         return (game.researchStage || 1) >= r.value;
@@ -513,7 +566,7 @@ function paperOtherRowsProgress(p){
 function paperRequireCurrent(r){
 
     if(!r)
-        return 0;
+        return new Decimal(0);
 
     if(r.expKey)
         return expCompletions(r.expKey);
@@ -615,6 +668,171 @@ function paperOwned(key){
 }
 
 
+// ============================================================
+// 精修(完成文本能力试炼后解锁,名额 = 文本能力点数)
+//   状态:game.paperRefined[key] = true
+//   精修不消耗资源,只占名额;升级被重置 / 清空时标记一起清掉
+// ============================================================
+
+function paperRefineMap(){
+
+    if(!game.paperRefined || typeof game.paperRefined !== "object")
+        game.paperRefined = {};
+
+    return game.paperRefined;
+
+}
+
+
+// 精修是否生效:升级必须在手(存档被改坏时不会凭空生效)
+function paperRefineActive(key){
+
+    return paperOwned(key) && !!paperRefineMap()[key];
+
+}
+
+
+// 精修是否不限数量(本源升级「包罗万象II」)
+function paperRefineUnlimited(){
+
+    return (typeof originUpgradeActive === "function")
+    && originUpgradeActive("allPapersII");
+
+}
+
+
+// 精修名额(= 文本能力点数;「包罗万象II」生效时不再限制)
+function paperRefineLimit(){
+
+    if(paperRefineUnlimited())
+        return Infinity;
+
+    return (typeof abilityRefineCount === "function")
+    ? abilityRefineCount()
+    : 0;
+
+}
+
+
+// 这个升级的精修是否不占用名额(「多元论文II」放行那三个)
+function paperRefineFree(key){
+
+    if(!originUpgradeActive("multiPaperII"))
+        return false;
+
+    return MULTI_PAPER_KEYS.indexOf(key) >= 0;
+
+}
+
+
+// 已占用的精修名额
+// (「多元论文II」生效时,放行的那三个精修了也不算名额)
+function paperRefinedCount(){
+
+    let n = 0;
+
+    for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+
+        let key =
+        FRONTIER_CONFIG.papers[i].key;
+
+        if(!paperRefineActive(key))
+            continue;
+
+        if(paperRefineFree(key))
+            continue;
+
+        n++;
+
+    }
+
+    return n;
+
+}
+
+
+// 不占名额的精修数量(多元论文II 生效时才可能 > 0;界面提示用)
+function paperRefinedFreeCount(){
+
+    let n = 0;
+
+    for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+
+        let key =
+        FRONTIER_CONFIG.papers[i].key;
+
+        if(paperRefineActive(key) && paperRefineFree(key))
+            n++;
+
+    }
+
+    return n;
+
+}
+
+
+// 这个升级能否精修(结论是本源层的入口,不参与精修)
+function paperCanRefine(key){
+
+    let conf =
+    paperConfig(key);
+
+    return !!conf && conf.canRefine !== false;
+
+}
+
+
+// 精修:占一个名额,效果换成强化版(refinedDesc)
+// 返回 "ok" | "owned"(已精修) | "notowned" | "norefine"(不可精修)
+//      | "full"(名额已用满)
+function refinePaper(key){
+
+    if(!paperOwned(key))
+        return "notowned";
+
+    if(!paperCanRefine(key))
+        return "norefine";
+
+    if(paperRefineActive(key))
+        return "owned";
+
+    // 名额判定:不占名额的(「多元论文II」放行的那三个)不看名额,
+    // 否则先精修别的把名额用满,这三个就再也点不动了
+    if(!paperRefineFree(key)
+        && paperRefinedCount() >= paperRefineLimit())
+        return "full";
+
+    paperRefineMap()[key] = true;
+
+    saveGame();
+    renderFrontierPage();
+
+    return "ok";
+
+}
+
+
+// 取消精修(把名额还回来;精修不消耗资源,所以可以自由改)
+// 取消精修等于改动手稿 → 与"重置本行"同口径,进行一次研究重置
+// (想法数 ≥ 12 时正常结算,否则只重置、不计入任何数据)
+function unrefinePaper(key){
+
+    if(!paperRefineActive(key))
+        return false;
+
+    delete paperRefineMap()[key];
+
+    saveGame();
+
+    frontierReset();
+
+    renderFrontierPage();
+
+    return true;
+
+}
+
+
 // 前沿领域是否已解锁(成就"求知":达到研究阶段4)
 function frontierUnlocked(){
     return isAchievementUnlocked("stage4");
@@ -639,21 +857,44 @@ function frontierInspiration(){
 }
 
 
-// 灵感获取速率(= 知识获取速率;不在前沿领域时为 0)
+// 本源升级「思如泉涌」:不在前沿领域中也能获得灵感
+function ideaSpringActive(){
+
+    return (typeof originUpgradeActive === "function")
+    && originUpgradeActive("ideaSpring");
+
+}
+
+
+// 灵感获取速率
+//   前沿领域中 : 与知识获取速率相同
+//   不在领域中 : 「思如泉涌」生效时为 知识获取速率^(2/3),否则 0
+//   综合能力试炼中:恒为 0(试炼期间无法获得灵感)
 function frontierInspirationRate(){
 
-    if(!frontierActive())
+    if(typeof comprehensiveInspirationBlocked === "function"
+        && comprehensiveInspirationBlocked())
         return new Decimal(0);
+
+    if(!frontierActive()){
+
+        if(!ideaSpringActive() || !frontierUnlocked())
+            return new Decimal(0);
+
+        return Decimal.pow(getKnowledgeSpeed(), 2 / 3);
+
+    }
 
     return getKnowledgeSpeed();
 
 }
 
 
-// 每 tick 累计灵感(仅前沿领域中)
+// 每 tick 累计灵感(前沿领域中,或「思如泉涌」生效时)
 function updateFrontier(dt){
 
-    if(!frontierActive())
+    if(!frontierActive()
+        && !ideaSpringActive())
         return;
 
     let rate =
@@ -679,29 +920,36 @@ function updateFrontier(dt){
 
 
 // "实验导向":实验助手速度 ×(1 + 实验完成次数总和)^0.2
+//   精修后指数提升为 1/4
 function experimentOrientedBonus(){
 
     if(!paperOwned("experimentOriented"))
         return new Decimal(1);
 
+    let expo =
+    paperRefineActive("experimentOriented") ? 1/4 : 0.2;
+
     return Decimal.pow(
         new Decimal(1).add(totalExpCompletions()),
-        0.2
+        expo
     );
 
 }
 
 
 // "注重创新":知识获取 ×(1 + 灵感)^(1/4)
-// 灵感取当前值(动态);未购买为 ×1
+//   精修后指数提升为 1/3;灵感取当前值(动态);未购买为 ×1
 function innovationBonus(){
 
     if(!paperOwned("innovation"))
         return new Decimal(1);
 
+    let expo =
+    paperRefineActive("innovation") ? 1/3 : 1/4;
+
     return Decimal.pow(
         new Decimal(1).add(frontierInspiration()),
-        1/4
+        expo
     );
 
 }
@@ -714,7 +962,10 @@ function innovationBonus(){
 //   N=2 元-力量随想法加成底数(exp2Base)
 //   N=3 想法价格膨胀延后(exp3Effect)
 //   N=4 理论价格膨胀延后(exp4Effect)
-// 注:多次完成加成不属于"首次完成效果",不受本倍率影响
+// 注:多次完成加成不属于"首次完成效果",不受本倍率影响;
+//    精修"参考实验N"后,多次完成效果会另行放大(见 experiment.js 的
+//    exp1CompletionBonus / exp2CompletionBonus / exp3CompletionDivisor /
+//    exp4CompletionBonus)
 function refExpMultiplier(n){
 
     if(typeof paperOwned !== "function")
@@ -730,39 +981,56 @@ function refExpMultiplier(n){
 // ------------------------------------------------------------
 
 // "参考文献-引用旧理论":理论1~5 的乘积指数 1 → 1.1
-// (知识产量 = base × 各理论乘积,其中理论1~5 的项 ^1.1)
+// 精修后 → 1.2
 // 作用点:theories.js 的 theoryPowerProduct()
 function refLegacyTheoryExponent(){
 
-    if(typeof paperOwned !== "function")
+    if(typeof paperOwned !== "function"
+        || !paperOwned("refLegacyTheory"))
         return 1;
 
-    return paperOwned("refLegacyTheory") ? 1.1 : 1;
+    return paperRefineActive("refLegacyTheory") ? 1.2 : 1.1;
 
 }
 
 
 // "参考文献-引用理论6":理论6 的乘积指数 1 → 1.3
+// 精修后 → 1.5
 // 作用点:theories.js 的 theoryPowerProduct()
 function refTheory6Exponent(){
 
-    if(typeof paperOwned !== "function")
+    if(typeof paperOwned !== "function"
+        || !paperOwned("refTheory6"))
         return 1;
 
-    return paperOwned("refTheory6") ? 1.3 : 1;
+    return paperRefineActive("refTheory6") ? 1.5 : 1.3;
 
 }
 
 
 // "参考文献-引用实验成果":行动点公式指数 0.05 → 0.06
+// 精修后 → 0.07
+// 能力「细心」:再 +0.005×细心(细心试炼中失效)
 // 作用点:research.js 的 actionPointsGain()
 function researchActionExp(){
 
-    if(typeof paperOwned !== "function"
-        || !paperOwned("refExperiment"))
-        return RESEARCH_CONFIG.actionExp;
+    let exp =
+    RESEARCH_CONFIG.actionExp;
 
-    return RESEARCH_CONFIG.actionExpRef;
+    if(typeof paperOwned === "function"
+        && paperOwned("refExperiment"))
+        exp = paperRefineActive("refExperiment")
+        ? FRONTIER_CONFIG.refineActionExp
+        : RESEARCH_CONFIG.actionExpRef;
+
+    // 0.05 + 0.005×n 的浮点尾巴(0.060000000000000005)要去掉,
+    // 这个值会直接显示在论文卡片上
+    let bonus =
+    ((typeof carefulActionExpBonus === "function")
+        ? carefulActionExpBonus()
+        : 0);
+
+    return Math.round((exp + bonus) * 1e9) / 1e9;
 
 }
 
@@ -774,8 +1042,19 @@ function researchActionExp(){
 
 function paperMultText(key){
 
-    if(key === "legacyTheory")
-        return "当前升级倍率:×" + format(metaUpgradeRate());
+    if(key === "legacyTheory"){
+
+        let text =
+        "当前升级倍率:×" + format(metaUpgradeRate());
+
+        // 精修后额外提升元-力量效果3(获取速度)
+        if(paperRefineActive("legacyTheory")
+            && isEffectUnlocked("metaGain"))
+            text += " ｜ 元-力量获取:×" + format(metaGainBonus());
+
+        return text;
+
+    }
 
     if(key === "experimentOriented")
         return "当前加成:×" + format(experimentOrientedBonus());
@@ -783,17 +1062,20 @@ function paperMultText(key){
     if(key === "innovation")
         return "当前加成:×" + format(innovationBonus());
 
-    // "参考文献-引用旧理论":(Π理论1~5)^1.1 ÷ (Π理论1~5) = (Π理论1~5)^0.1
+    // "参考文献-引用旧理论":(Π理论1~5)^n ÷ (Π理论1~5) = (Π理论1~5)^(n-1)
+    // (n 普通 1.1 / 精修 1.2)
     if(key === "refLegacyTheory")
-        return "当前加成:×" + format(theoryProductLegacy().pow(0.1));
+        return "当前加成:×" +
+        format(theoryProductLegacy().pow(refLegacyTheoryExponent() - 1));
 
-    // "参考文献-引用理论6":(理论6)^1.3 ÷ 理论6 = (理论6)^0.3
+    // "参考文献-引用理论6":(理论6)^n ÷ 理论6 = (理论6)^(n-1)
     if(key === "refTheory6")
-        return "当前加成:×" + format(theoryProduct6().pow(0.3));
+        return "当前加成:×" +
+        format(theoryProduct6().pow(refTheory6Exponent() - 1));
 
     // "参考文献-引用实验成果":指数提升不是倍数,直接显示指数
     if(key === "refExperiment")
-        return "当前公式指数:^" + RESEARCH_CONFIG.actionExpRef;
+        return "当前公式指数:^" + researchActionExp();
 
     return "";
 
@@ -816,15 +1098,21 @@ function introUnlocked(){
 }
 
 
-// 摘要对知识边界的加成倍率 = sqrt(1 + 灵感);未购买为 ×1
+// 摘要对知识边界的加成倍率;未购买为 ×1
+//   普通:sqrt(1 + 灵感) = (1+灵感)^(1/2)
+//   精修: (1+灵感)^(2/3)
 function summaryBoundaryBonus(){
 
     if(!summaryUnlocked())
         return new Decimal(1);
 
-    return new Decimal(1)
-    .add(frontierInspiration())
-    .sqrt();
+    let expo =
+    paperRefineActive("summary") ? 2/3 : 1/2;
+
+    return Decimal.pow(
+        new Decimal(1).add(frontierInspiration()),
+        expo
+    );
 
 }
 
@@ -885,6 +1173,11 @@ function enterFrontier(){
 
     game.frontierActive = true;
 
+    // 成就「并无区别」:在综合能力试炼中进入前沿领域
+    if(typeof trialActive === "function"
+        && trialActive("comprehensive"))
+        game.compTrialFrontierDone = true;
+
     frontierReset();
 
     saveGame();
@@ -944,6 +1237,11 @@ function buyPaper(key){
     // 额外条件只是门槛:达成即可,不消耗对应资源
     if(!paperRequireMet(conf))
         return "require";
+
+    // 文本能力试炼的数量上限(购买时是权威判定)
+    if(typeof trialPaperBlocked === "function"
+        && trialPaperBlocked(key))
+        return "trialpaper";
 
     if(frontierInspiration().lt(conf.cost))
         return "noinspiration";
@@ -1023,6 +1321,9 @@ function clearPaperRow(row){
 
         game[p.key + "Unlocked"] = false;
 
+        // 升级没了,精修也就不成立了(名额随之释放)
+        delete paperRefineMap()[p.key];
+
     }
 
     if(!any)
@@ -1047,6 +1348,92 @@ function resetPaperRow(row){
     saveGame();
 
     // 与研究重置一致(含前沿领域进出的计入规则)
+    frontierReset();
+
+    renderFrontierPage();
+
+    return refund;
+
+}
+
+
+// ============================================================
+// 全部重置(退还所有已购买升级的灵感,并触发一次研究重置)
+//   refund   = false 时只清空、不退还(文本能力试炼进入时用)
+//   skipKeys = 不参与清空的升级(文本试炼保留「结论」)
+// 返回退还的灵感(refund=false 时返回 0)
+// ============================================================
+function clearAllPapers(refund, skipKeys){
+
+    let total =
+    new Decimal(0);
+
+    for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+
+        let p =
+        FRONTIER_CONFIG.papers[i];
+
+        if(skipKeys && skipKeys.indexOf(p.key) >= 0)
+            continue;
+
+        if(!paperOwned(p.key))
+            continue;
+
+        game[p.key + "Unlocked"] = false;
+
+        // 升级没了,精修也就不成立了(名额随之释放)
+        delete paperRefineMap()[p.key];
+
+        total = total.add(p.cost);
+
+    }
+
+    if(!refund || total.lte(0))
+        return new Decimal(0);
+
+    game.inspiration =
+    frontierInspiration().add(total);
+
+    return total;
+
+}
+
+
+// 是否还有任何已购买的论文升级
+function anyPaperOwned(){
+
+    for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+
+        if(paperOwned(FRONTIER_CONFIG.papers[i].key))
+            return true;
+
+    }
+
+    return false;
+
+}
+
+
+// 论文升级页的"重置所有论文升级"按钮
+// 与"重置本行"同一口径:退还灵感 + 进行一次研究重置
+function resetAllPapers(){
+
+    if(!anyPaperOwned())
+        return new Decimal(0);
+
+    if(typeof confirm === "function"
+        && !confirm("重置所有论文升级?将退还全部升级花费的灵感," +
+            "并进行一次研究重置。"))
+        return new Decimal(0);
+
+    let refund =
+    clearAllPapers(true);
+
+    if(refund.lte(0))
+        return new Decimal(0);
+
+    saveGame();
+
     frontierReset();
 
     renderFrontierPage();
@@ -1114,6 +1501,7 @@ function paperColumn(key){
 
 
 // 当前已购买的论文升级 → "{11,21,31,41,51,61}"
+// 已精修的升级在末尾加 *:例 {11*,21,31}
 function paperExportCode(){
 
     let parts = [];
@@ -1129,7 +1517,10 @@ function paperExportCode(){
         for(let j = 0; j < list.length; j++){
 
             if(paperOwned(list[j].key))
-                parts.push("" + rows[i] + (j + 1));
+                parts.push(
+                    "" + rows[i] + (j + 1)
+                    + (paperRefineActive(list[j].key) ? "*" : "")
+                );
 
         }
 
@@ -1217,11 +1608,13 @@ function exportPapers(){
 }
 
 
-// 解析导入文本 → { keys: [...], bad: [...] }
+// 解析导入文本 → { keys: [...], refined: [...], bad: [...] }
 // 容忍空格/换行/大括号/中文逗号;每项必须是两位数字(行 + 列)
+// 末尾带 * 的项表示该升级已精修(例:11*)
 function parsePaperCode(text){
 
     let keys = [];
+    let refined = [];
     let bad = [];
 
     let raw =
@@ -1234,14 +1627,20 @@ function parsePaperCode(text){
 
     for(let i = 0; i < parts.length; i++){
 
-        let tok =
+        let rawTok =
         parts[i].replace(/\s/g, "");
 
-        if(tok === "")
+        if(rawTok === "")
             continue;
 
+        let star =
+        rawTok.charAt(rawTok.length - 1) === "*";
+
+        let tok =
+        star ? rawTok.slice(0, -1) : rawTok;
+
         if(!/^[0-9]{2}$/.test(tok)){
-            bad.push(tok);
+            bad.push(rawTok);
             continue;
         }
 
@@ -1255,7 +1654,7 @@ function parsePaperCode(text){
         papersInRow(row);
 
         if(list.length === 0 || col < 1 || col > list.length){
-            bad.push(tok);
+            bad.push(rawTok);
             continue;
         }
 
@@ -1265,9 +1664,15 @@ function parsePaperCode(text){
         if(keys.indexOf(key) < 0)
             keys.push(key);
 
+        // 结论不参与精修(导入时也按不可精修处理)
+        if(star
+            && paperCanRefine(key)
+            && refined.indexOf(key) < 0)
+            refined.push(key);
+
     }
 
-    return { keys: keys, bad: bad };
+    return { keys: keys, refined: refined, bad: bad };
 
 }
 
@@ -1406,6 +1811,43 @@ function importPapers(){
 
     }
 
+    // ---- 2.5 精修(按导入项末尾的 * 标记;名额不够的跳过)----
+    let refinedDone = 0;
+    let refinedFail = [];
+
+    if(parsed.refined && parsed.refined.length > 0){
+
+        for(let i = 0; i < parsed.refined.length; i++){
+
+            let key =
+            parsed.refined[i];
+
+            // 购买失败的升级不精修
+            if(!paperOwned(key))
+                continue;
+
+            if(paperRefineActive(key)){
+                refinedDone++;
+                continue;
+            }
+
+            if(paperRefinedCount() >= paperRefineLimit()){
+
+                let conf =
+                paperConfig(key);
+
+                refinedFail.push(conf ? conf.name : key);
+                continue;
+
+            }
+
+            paperRefineMap()[key] = true;
+            refinedDone++;
+
+        }
+
+    }
+
     // ---- 3. 有行被清空过 → 统一做一次研究重置 ----
     if(refunded.gt(0)){
 
@@ -1418,6 +1860,12 @@ function importPapers(){
     // ---- 4. 结果提示 + 收起窗口 ----
     let msg =
     "已导入 " + done + " 项";
+
+    if(refinedDone > 0)
+        msg += ";已精修 " + refinedDone + " 项";
+
+    if(refinedFail.length > 0)
+        msg += ";精修名额不足:" + refinedFail.join("、");
 
     if(parsed.bad.length > 0)
         msg += ";无法识别:" + parsed.bad.join(",");
@@ -1450,6 +1898,9 @@ function paperCardHTML(p){
     let owned =
     paperOwned(p.key);
 
+    let refined =
+    paperRefineActive(p.key);
+
     let rowBlocked =
     paperRowBlocked(p);
 
@@ -1459,13 +1910,21 @@ function paperCardHTML(p){
     let reqLabel =
     paperRequireLabel(p);
 
+    // 精修后描述换成强化版,并改成金色
+    let descText =
+    (refined && p.refinedDesc)
+    ? p.refinedDesc
+    : p.desc;
+
     let html =
     '<div class="paper-card'
     + (owned ? " owned" : " locked")
+    + (refined ? " refined" : "")
     + (rowBlocked ? " row-blocked" : "")
     + '" data-paper-card="' + p.key + '">' +
     '<div class="paper-name">' + p.name + '</div>' +
-    '<div class="paper-desc">' + p.desc + '</div>' +
+    '<div class="paper-desc' + (refined ? " refined" : "") + '">' +
+    descText + '</div>' +
     '<div class="paper-cost">花费:' + format(p.cost) + ' 灵感</div>';
 
     if(reqLabel){
@@ -1491,11 +1950,52 @@ function paperCardHTML(p){
         html +=
         '<div class="paper-state">已完成</div>';
 
+        // ---- 精修(金色;结论不参与)----
+        if(p.canRefine !== false){
+
+            if(refined){
+
+                html +=
+                '<div class="paper-refine-row">' +
+                '<span class="paper-refine-done">已精修</span>' +
+                '<button class="paper-refine-cancel"' +
+                ' onclick="unrefinePaper(\'' + p.key + '\')">取消</button>' +
+                '</div>';
+
+            }else{
+
+                // 不占名额的精修(多元论文II)在名额用满后也能点
+                let canRefine =
+                paperRefineFree(p.key)
+                || paperRefinedCount() < paperRefineLimit();
+
+                html +=
+                '<div class="paper-refine-row">' +
+                '<button class="paper-refine-btn"' +
+                (canRefine ? '' : ' disabled') +
+                ' title="完成文本能力试炼后可精修,名额等于文本能力点数"' +
+                ' onclick="refinePaper(\'' + p.key + '\')">精修</button>' +
+                '</div>';
+
+            }
+
+        }
+
     }else if(rowBlocked){
 
         // 同一行只能获取一个:本行已选择其它升级
         html +=
         '<div class="paper-row-lock">本行已选择其它升级,<br>重置本行后可改选</div>' +
+        '<button class="assistant-btn paper-buy" disabled>编写</button>';
+
+    }else if(typeof trialPaperBlocked === "function"
+        && trialPaperBlocked(p.key)){
+
+        // 文本能力试炼:论文升级数量已用满
+        html +=
+        '<div class="paper-trial-lock">' +
+        '文本试炼中,论文升级数量已用满' +
+        '</div>' +
         '<button class="assistant-btn paper-buy" disabled>编写</button>';
 
     }else{
@@ -1585,12 +2085,19 @@ function buildFrontierHTML(){
     '灵感可用于编写论文,换取各种加成。' +
     '</p>';
 
-    // 灵感(不在前沿领域时不增长)
+    // 灵感(不在前沿领域时不增长;「思如泉涌」生效时照常增长)
+    // 综合能力试炼中无法获得灵感 → 直接说明原因
+    let inspBlocked =
+    (typeof comprehensiveInspirationBlocked === "function")
+    && comprehensiveInspirationBlocked();
+
     html +=
     '<div class="fr-res">灵感:<span class="fr-insp">0</span>' +
-    (active
-        ? '<span class="fr-rate-wrap">(+<span class="fr-rate">0</span>/秒)</span>'
-        : '<span class="fr-rate-wrap">(仅在前沿领域中增长)</span>') +
+    (inspBlocked
+        ? '<span class="fr-rate-wrap">(试炼中无法获得灵感)</span>'
+        : ((active || ideaSpringActive())
+            ? '<span class="fr-rate-wrap">(+<span class="fr-rate">0</span>/秒)</span>'
+            : '<span class="fr-rate-wrap">(仅在前沿领域中增长)</span>')) +
     '</div>';
 
     // 知识边界
@@ -1625,6 +2132,37 @@ function buildFrontierHTML(){
     html +=
     '<h3>论文升级</h3>';
 
+    // 精修进度(完成过一次文本能力试炼后才显示)
+    if(typeof abilityRefineCount === "function"
+        && abilityRefineCount() > 0){
+
+        html +=
+        '<div class="paper-refine-count">你已精修了 ' +
+        paperRefinedCount() +
+        (paperRefineUnlimited()
+            ? ' 个论文升级(不限数量)'
+            : ' / ' + paperRefineLimit() + ' 个论文升级') +
+        '</div>';
+
+        // 取消精修的代价(紧跟精修进度之后)
+        html +=
+        '<div class="paper-refine-hint">' +
+        '取消精修会自动进行一次研究重置' +
+        '</div>';
+
+        // 「多元论文II」:那三个精修不占名额,数量上会对不上,单独说明
+        if(paperRefinedFreeCount() > 0){
+
+            html +=
+            '<div class="paper-refine-hint">' +
+            '其中 ' + paperRefinedFreeCount() +
+            ' 个(多元论文提到的三个)不占用名额' +
+            '</div>';
+
+        }
+
+    }
+
     // 导出 / 导入(方便调整升级组合)
     html +=
     '<div class="paper-io">' +
@@ -1639,6 +2177,7 @@ function buildFrontierHTML(){
         '<div class="paper-import-box">' +
         '<div class="paper-import-hint">' +
         '格式:{xy,xy,...},x = 行,y = 该行的第几个升级(如 {11,21,31,41,51} = 每行都选第一个)。<br>' +
+        '已精修的升级在末尾加 * (如 11*);精修名额不够时会跳过。<br>' +
         '导入会先重置所有可重置的行(退还灵感),再购买导入的升级,最后进行一次研究重置。' +
         '</div>' +
         '<textarea id="paperImportInput" rows="3" spellcheck="false"' +
@@ -1653,15 +2192,44 @@ function buildFrontierHTML(){
 
     html +=
     '<p class="research-hint paper-hint">' +
-    '同一行的升级只能获取一个。此外,一些升级会额外需要一些条件才能获取,' +
+    (originUpgradeActive("allPapers")
+        ? '本源升级「包罗万象」生效中:同一行的升级不再互斥。'
+        : '同一行的升级只能获取一个。') +
+    '此外,一些升级会额外需要一些条件才能获取,' +
     '达到需要的条件即可,不消耗相应资源。重置升级会同样进行一次研究重置。' +
+    (paperRefineUnlimited()
+        ? '已完成的升级可以精修,精修不消耗资源,且不再有数量限制。'
+        : '已完成的升级可以精修,精修不消耗资源,只占用精修名额(由文本能力提供)。') +
     '</p>';
+
+    // 文本能力试炼:论文升级数量上限提示
+    if(typeof trialActive === "function"
+        && trialActive("text")){
+
+        html +=
+        '<p class="paper-trial-hint">' +
+        '文本能力试炼中:最多购买 ' + trialPaperLimit() +
+        ' 个论文升级(已购买 ' + trialPaperCount() +
+        ' 个),多元论文提到的三个升级与「结论」不计入数量。' +
+        '</p>';
+
+    }
 
     let rows =
     paperRows();
 
     for(let i = 0; i < rows.length; i++)
         html += paperRowHTML(rows[i]);
+
+    // 全部重置(包括没有"重置本行"按钮的行)
+    html +=
+    '<div class="paper-reset-all">' +
+    '<button class="paper-reset-btn" id="paperResetAllBtn"' +
+    ' onclick="resetAllPapers()">重置所有论文升级</button>' +
+    '<div class="paper-reset-hint">' +
+    '退还全部升级花费的灵感,<br>并进行一次研究重置' +
+    '</div>' +
+    '</div>';
 
     return html;
 
@@ -1714,17 +2282,40 @@ function renderFrontierPage(){
         frontierUnlocked() ? 1 : 0,
         frontierActive() ? 1 : 0,
         // 导入窗口的展开状态(打开/关闭需要重建 DOM)
-        paperImportOpen ? 1 : 0
+        paperImportOpen ? 1 : 0,
+        // 文本能力试炼的论文数量上限(变了要重建卡片上的提示)
+        (typeof trialActive === "function"
+            && trialActive("text"))
+            ? trialPaperLimit() : -1,
+        // 精修名额(文本能力点数;变了要重建精修按钮的可用状态)
+        paperRefineLimit(),
+        // 影响"互斥 / 精修名额"规则的本源升级
+        // (在本源页买完后必须重建,否则卡片上的锁定状态与说明会留在旧样子)
+        (typeof originUpgradeActive === "function"
+            && originUpgradeActive("multiPaper")) ? 1 : 0,
+        (typeof originUpgradeActive === "function"
+            && originUpgradeActive("allPapers")) ? 1 : 0,
+        (typeof originUpgradeActive === "function"
+            && originUpgradeActive("multiPaperII")) ? 1 : 0,
+        // 「包罗万象II」:精修不再限数量(要重建按钮与进度文案)
+        (typeof originUpgradeActive === "function"
+            && originUpgradeActive("allPapersII")) ? 1 : 0,
+        // 「思如泉涌」:不在前沿领域也产灵感(要重建灵感那一行)
+        (typeof originUpgradeActive === "function"
+            && originUpgradeActive("ideaSpring")) ? 1 : 0,
+        // 综合能力试炼:灵感停止增长(要重建灵感那一行)
+        (typeof comprehensiveInspirationBlocked === "function"
+            && comprehensiveInspirationBlocked()) ? 1 : 0
     ];
 
     for(let i = 0;
         i < FRONTIER_CONFIG.papers.length;
         i++){
 
+        // 1 = 已完成,2 = 已精修(精修会换描述,必须重建)
         keyParts.push(
-            paperOwned(
-                FRONTIER_CONFIG.papers[i].key
-            ) ? 1 : 0
+            (paperOwned(FRONTIER_CONFIG.papers[i].key) ? 1 : 0)
+            + (paperRefineActive(FRONTIER_CONFIG.papers[i].key) ? 2 : 0)
         );
 
     }
@@ -1767,7 +2358,7 @@ function renderFrontierPage(){
     setFrontierVal(panel, ".fr-insp", format(frontierInspiration()));
     setFrontierVal(panel, ".fr-boundary", format(knowledgeLimit()));
 
-    if(frontierActive())
+    if(frontierActive() || ideaSpringActive())
         setFrontierVal(panel, ".fr-rate", format(frontierInspirationRate()));
 
     if(summaryUnlocked())
@@ -1830,6 +2421,13 @@ function renderFrontierPage(){
             btn.disabled = !any;
 
         }
+
+        // 全部重置按钮:有任何已购买升级时才可点
+        let allBtn =
+        panel.querySelector("#paperResetAllBtn");
+
+        if(allBtn)
+            allBtn.disabled = !anyPaperOwned();
 
         // 条件进度文本(行动点 / 实验次数会实时变化)
         let reqs =

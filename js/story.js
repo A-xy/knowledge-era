@@ -281,6 +281,31 @@ const ownTheoryStoryLines=[
 ];
 
 
+// 首次获得本源升级「自我提升」时的剧情(解锁能力试炼)
+const abilityTrialStoryLines=[
+
+
+"你已经完成了很多研究。",
+
+
+"不过，你意识到，为了更多地探索新知，你需要提升自己。",
+
+
+"你可以在多种能力上提升自己，通过能力获得各种加成。",
+
+
+"不过，提升能力并不简单，需要通过完成能力试炼来实现。",
+
+
+"能力试炼是一种更困难的研究，你需要在试炼中达到一定量的资源来完成试炼。",
+
+
+"继续前进吧，祝好。"
+
+
+];
+
+
 // 当前正在播放的剧情(开局或想法)
 let currentStoryLines = storyLines;
 
@@ -433,6 +458,14 @@ playStoryLines(conclusionStoryLines);
 function showOwnTheoryStory(){
 
 playStoryLines(ownTheoryStoryLines);
+
+}
+
+
+// 播放"获得自我提升"剧情(解锁能力试炼)
+function showAbilityTrialStory(){
+
+playStoryLines(abilityTrialStoryLines);
 
 }
 

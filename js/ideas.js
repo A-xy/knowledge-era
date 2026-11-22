@@ -16,6 +16,8 @@
 //   效果4(需 10 想法):想法花费 ÷(1 + metaPower)
 //   效果5~7(需论文"引言";29/32/35 想法):实验助手速度 / 行动点获取 / 知识边界
 //     —— 未解锁引言时既不生效,也不显示
+//   效果8(需"引言"已精修;118 想法):你的理论的力量获取
+//     —— 精修引言之前不显示(见 requiresRefine)
 // ============================================================
 
 
@@ -82,20 +84,42 @@ const META_EFFECTS = [
         requiresIntro: true,
         name: "知识边界提升",
         desc: "知识边界 ×sqrt(1 + MetaPower)"
+    },
+    {
+        // 需要论文"引言"已精修(见 requiresRefine)
+        key: "ownTheoryGain",
+        unlockIdeas: 118,
+        requiresIntro: true,
+        requiresRefine: "intro",
+        name: "你的理论加成",
+        desc: "你的理论的力量获取 ×(1 + MetaPower)^(1/40)"
     }
 ];
 
 
-// 效果的前提是否已满足(requiresIntro 的效果需要论文"引言")
-// 未解锁引言时:效果既不生效,也不在界面显示
+// 效果的前提是否已满足(requiresIntro / requiresRefine)
+// 未解锁前提时:效果既不生效,也不在界面显示
 function metaEffectAvailable(effect){
 
-    if(!effect.requiresIntro)
-        return true;
+    if(effect.requiresIntro){
 
-    // 引言定义在 frontier.js(运行时已加载);此处做存在性判断以便离线测试
-    return typeof introUnlocked === "function"
-    && introUnlocked();
+        // 引言定义在 frontier.js(运行时已加载);此处做存在性判断以便离线测试
+        if(typeof introUnlocked !== "function"
+            || !introUnlocked())
+            return false;
+
+    }
+
+    // 需要某个论文升级已精修(目前只有"引言")
+    if(effect.requiresRefine){
+
+        if(typeof paperRefineActive !== "function"
+            || !paperRefineActive(effect.requiresRefine))
+            return false;
+
+    }
+
+    return true;
 
 }
 
@@ -163,6 +187,21 @@ function metaBoundaryBonus(){
 }
 
 
+// 效果8:你的理论的力量获取 ×(1+MetaPower)^(1/40)
+// (需要论文"引言"已精修 + 118 想法;作用点:origin.js 的 ownTheoryRate)
+function metaOwnTheoryBonus(){
+
+    if(!isEffectUnlocked("ownTheoryGain"))
+        return new Decimal(1);
+
+    return Decimal.pow(
+        new Decimal(1).add(game.metaPower),
+        1/40
+    );
+
+}
+
+
 // ============================================================
 // 元-力量效果公式(统一入口,避免在多处重复计算)
 // ============================================================
@@ -222,13 +261,21 @@ function legacyTheoryUpgradeRate(){
 
 
 // 效果3 的元-力量获取倍率:(1+MetaPower)^(1/4)
+// 论文"理论部分-关联旧理论"精修后 → (1+MetaPower)^(1/3)
 // 与实验无关,直接构造,不嵌套 metaPowerBonus(避免双重指数)
-// 注意:指数 1/4 为用户调整后的数值(原 1/3),以代码为准
 function metaGainBonus(){
+
+    let expo =
+    (typeof paperRefineActive === "function"
+        && paperRefineActive("legacyTheory"))
+    ? 1/3
+    : 1/4;
+
     return Decimal.pow(
         new Decimal(1).add(game.metaPower),
-        1/4
+        expo
     );
+
 }
 
 
@@ -278,6 +325,11 @@ function metaEffectDesc(effect){
         format(metaBoundaryBonus());
     }
 
+    if(effect.key === "ownTheoryGain"){
+        return "你的理论的力量获取 ×" +
+        format(metaOwnTheoryBonus());
+    }
+
     return effect.desc;
 
 }
@@ -297,8 +349,13 @@ function renderMetaEffects(){
         return;
 
     // 签名 = 想法数 + 引言是否解锁(引言解锁会新增可见的效果条目)
+    //       + 引言是否已精修(精修会新增效果8)
     let key =
-    game.ideas + ":" + (introEffectsEnabled() ? 1 : 0);
+    game.ideas + ":" + (introEffectsEnabled() ? 1 : 0)
+    + ":" + (
+        (typeof paperRefineActive === "function"
+            && paperRefineActive("intro")) ? 1 : 0
+    );
 
     // 没有变化 → 不重建,只更新数值文本
     if(lastEffectKey === key){
@@ -386,6 +443,18 @@ function renderMetaEffects(){
 }
 
 
+// 想法价格二次项系数 B 的除数(创造力;未解锁能力层时为 1)
+// 创造力让想法价格的膨胀速度变慢:÷(1 + 创造力×0.2)
+// 创造力试炼中该能力失效 → 1
+function ideaBDivisor(){
+
+    return (typeof creativityDivisor === "function")
+    ? creativityDivisor()
+    : 1;
+
+}
+
+
 // 获得下一个想法的价格:10^f(x, A, B, N)
 // x = 当前想法数 + 1(下一个想法的序号,从 1 开始)
 // f(x) = A*x + B*max(x-N, 0)^2
@@ -403,7 +472,7 @@ function ideaCost(){
 
     let exp =
     IDEA_PRICE.A * x
-    + IDEA_PRICE.B * over * over;
+    + (IDEA_PRICE.B / ideaBDivisor()) * over * over;
 
     let base =
     Decimal.pow(
@@ -544,7 +613,7 @@ function applyOneIdea(){
 
 // 单次调用最多批量获得多少个想法(防极端情况下卡住主线程;
 // 未达上限时下一帧会继续)
-const IDEA_BATCH_MAX = 100;
+const IDEA_BATCH_MAX = 1000;
 
 
 // 获得想法:重置知识与理论,ideas + 1

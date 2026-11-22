@@ -241,6 +241,9 @@ async function importSave(){
         // 本源层字段(ensureOriginCompat,见 origin.js)
         ensureOriginCompat();
 
+        // 能力试炼字段(ensureAbilityCompat,见 ability.js)
+        ensureAbilityCompat();
+
         // 兼容旧存档:成就相关字段(ensureAchievementCompat,见 achievements.js)
         ensureAchievementCompat();
 
@@ -317,6 +320,9 @@ async function importSave(){
         // 实验系统 Decimal 字段还原(存档把 Decimal 序列化为字符串)
         // 主要是 exp2.elapsed 与 measurements[].t(updateExperiment2Time 累加)
         fixExp2TimeFields();
+
+        // 实验完成次数归一化为 Decimal(旧存档里是 number/字符串)
+        fixExpCompletions();
 
         if(game.lastSave === undefined)
             game.lastSave = Date.now();
@@ -472,6 +478,9 @@ function loadGame(){
     // 本源层(论文"结论"之后):origin / originResets / 历史最高阶段
     ensureOriginCompat();
 
+    // 能力试炼(本源升级"自我提升"之后):abilities / abilityTrial
+    ensureAbilityCompat();
+
     // 成就相关字段(ensureAchievementCompat,见 achievements.js)
     ensureAchievementCompat();
 
@@ -550,6 +559,9 @@ function loadGame(){
 
     // 实验系统 Decimal 字段还原(存档把 Decimal 序列化为字符串)
     fixExp2TimeFields();
+
+    // 实验完成次数归一化为 Decimal(旧存档里是 number/字符串)
+    fixExpCompletions();
 
     if(game.lastSave === undefined)
         game.lastSave = Date.now();

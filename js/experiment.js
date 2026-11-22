@@ -1156,10 +1156,11 @@ function exp2Accuracy(deviation){
 
 // 当前元-力量加成底数(基于最佳提交;未提交 = 2 无加成)
 // 底数用于 metaPowerGain:0.1 * Base^(想法数-1)
+// 返回 Decimal:重复完成次数很大时 0.1*ln(c) 也可能超出 number 范围
 function exp2Base(){
 
     if(!game.experiments || !game.experiments.exp2)
-        return 2;
+        return new Decimal(2);
 
     let e =
     game.experiments.exp2;
@@ -1169,7 +1170,7 @@ function exp2Base(){
     e.bestEver || e.bestResult;
 
     if(!src)
-        return 2;
+        return new Decimal(2);
 
     // 首次完成效果 = 基础底数 2 + 额外部分(accuracy.base - 2)
     // 论文"实验部分-参考实验2"使额外部分 ×2(最高 2 + 0.5×2 = 3.0)
@@ -1177,9 +1178,12 @@ function exp2Base(){
     let first =
     exp2Accuracy(src.deviation).base;
 
-    return 2
-    + (first - 2) * refExpMultiplier(2)
-    + exp2CompletionBonus();
+    return new Decimal(2)
+    .add(
+        new Decimal(first - 2)
+        .mul(refExpMultiplier(2))
+    )
+    .add(exp2CompletionBonus());
 
 }
 
@@ -1537,22 +1541,37 @@ function renderExperimentPage(){
 // 多次完成效果的具体值(根据完成次数计算)
 // 仅当 completions>=2 时被调用
 // 数值统一走 format(超过 1e6 显示为科学计数法)
-function expMultiEffectText(key, c){
+//
+// ⚠ 这里不再自己算公式,直接读真正生效的 exp*Completion*():
+//   论文升级「参考实验N」精修后指数/倍数会变(exp1 ×c→×c²、
+//   exp2 0.1ln→0.2ln、exp3 ^10→^20、exp4 ^2→^4),硬编码就会显示旧值。
+// ⚠ 也不能用 Number 相乘(完成次数 ~1e280 时 c*c 直接变 Infinity),
+//   必须交给 Decimal。
+function expMultiEffectText(key){
 
-    if(key === "exp1")
-        return "元-力量生产 ×" + format(c);
+    if(key === "exp1"){
+
+        return "元-力量生产 ×" + format(exp1CompletionBonus())
+        + (expPaperRefined(1) ? "(=完成次数²)" : "");
+
+    }
 
     if(key === "exp2")
-        return "元-力量底数额外 +" + format(0.1 * Math.log(c));
+        return "元-力量底数额外 +" + format(exp2CompletionBonus());
 
-    if(key === "exp3")
-        return "想法花费 ÷"
-        + format(new Decimal(c).pow(10).round())
-        + "(=完成次数^10)";
+    if(key === "exp3"){
 
-    if(key === "exp4")
-        return "所有理论力量生产 ×"
-        + format(c * c) + "(=完成次数²)";
+        return "想法花费 ÷" + format(exp3CompletionDivisor())
+        + "(=完成次数^" + (expPaperRefined(3) ? 20 : 10) + ")";
+
+    }
+
+    if(key === "exp4"){
+
+        return "所有理论力量生产 ×" + format(exp4CompletionBonus())
+        + "(=完成次数" + (expPaperRefined(4) ? "⁴" : "²") + ")";
+
+    }
 
     return "";
 
@@ -1630,14 +1649,14 @@ function renderExpStats(key, boxId, firstEffectDesc){
         // 重复完成效果从第 2 次起才生效,所以只有 1 次时不附带说明
         let comp = expCompletions(key);
 
-        if(comp >= 1){
+        if(comp.gte(1)){
 
             html +=
             "<p class=\"exp-hint\">你已完成了 <b>" +
             format(comp) +
             "</b> 次此实验";
 
-            if(comp >= 2)
+            if(comp.gte(2))
                 html += ",使得:" + expMultiEffectText(key, comp);
 
             html += "</p>";
@@ -1713,7 +1732,7 @@ function renderExpCollapsed(key, firstEffectDesc){
         format(comp) +
         " 次</p>";
 
-        if(comp >= 2){
+        if(comp.gte(2)){
 
             html +=
             "<p class=\"exp-hint\">重复完成效果:" +
@@ -2757,8 +2776,23 @@ function ensureExpStats(e){
     if(e.operationCount === undefined)
         e.operationCount = 0;
 
-    if(e.completions === undefined)
-        e.completions = 0;
+    // 完成次数用 Decimal 存:自动实验助手长期累加会突破 1.79e308,
+    // 用 Number 存到顶就变成 Infinity(界面显示 ∞,效果全部失效)。
+    // 旧存档里的 number/字符串在这里归一化(Infinity 存盘后是 null,按 0 处理;
+    // 运行中已经溢出成 Infinity 的旧数据回填 1e308,至少保住量级、还能继续涨)
+    if(e.completions === undefined || e.completions === null)
+        e.completions = new Decimal(0);
+    else if(typeof e.completions === "number"
+        && !isFinite(e.completions))
+        e.completions = new Decimal("1e308");
+    else if(!(e.completions instanceof Decimal))
+        e.completions = new Decimal(e.completions);
+
+    // 兜底:任何非有限值(Number Infinity / Decimal Infinity / "Infinity" 字符串)
+    // 都回填 1e308,避免 ∞ 一直传染下去
+    if(!isFinite(e.completions.mag)
+        || !isFinite(e.completions.layer))
+        e.completions = new Decimal("1e308");
 
     if(e.bestOperations === undefined)
         e.bestOperations = null;
@@ -2813,10 +2847,10 @@ function expOnComplete(key){
     ensureExpStats(e);
 
     // 成就"意义何在":该实验的完成次数已达到阈值(此时再手动完成一次)
-    if(e.completions >= MANUAL_EXP_ACHIEVEMENT_THRESHOLD)
+    if(e.completions.gte(MANUAL_EXP_ACHIEVEMENT_THRESHOLD))
         game.manualExpAfterE10 = true;
 
-    e.completions++;
+    e.completions = e.completions.add(1);
 
     if(e.bestOperations === null
         || e.operationCount < e.bestOperations)
@@ -2825,19 +2859,32 @@ function expOnComplete(key){
 }
 
 
-// 某个实验的完成次数(显示与计算效果时向下取整;
-// 底层可存小数——自动实验助手会累加小数完成次数)
+// 某个实验的完成次数(返回向下取整后的 Decimal;底层可存小数
+// ——自动实验助手会累加小数完成次数)
+// 返回值是 Decimal 而不是 number:完成次数可以超过 1e308
 function expCompletions(key){
 
     let e =
     game.experiments[key];
 
     if(!e)
-        return 0;
+        return new Decimal(0);
 
     ensureExpStats(e);
 
-    return Math.floor(e.completions);
+    return e.completions.floor();
+
+}
+
+
+// 所有实验的完成次数归一化为 Decimal(读档/导入时调用一次)
+function fixExpCompletions(){
+
+    if(!game.experiments)
+        return;
+
+    for(let key in game.experiments)
+        ensureExpStats(game.experiments[key]);
 
 }
 
@@ -3044,9 +3091,21 @@ function regenerateExpAnswer(key){
 
 // ============================================================
 // 多次完成效果(实验已解锁且 completions>=2 时生效)
+// 论文"实验部分-参考实验N"精修后,对应实验的多次完成效果再放大:
+//   exp1 / exp3 / exp4 是平方(×(completions 的 10 次方) → 20 次方)
+//   exp2 是 ×2
 // ============================================================
 
-// exp1: 元-力量生产 × completions
+// 该实验的"参考实验N"是否已精修(升级必须在手)
+function expPaperRefined(n){
+
+    return (typeof paperRefineActive === "function")
+    && paperRefineActive("refExp" + n);
+
+}
+
+
+// exp1: 元-力量生产 × completions(精修后 × completions^2)
 function exp1CompletionBonus(){
 
     if(!game.experiments || !game.experiments.exp1)
@@ -3054,31 +3113,37 @@ function exp1CompletionBonus(){
 
     let c = expCompletions("exp1");
 
-    if(c < 2)
+    if(c.lt(2))
         return new Decimal(1);
 
-    return new Decimal(c);
+    return expPaperRefined(1)
+    ? c.pow(2)
+    : c;
 
 }
 
 
-// exp2: 元-力量底数额外 +0.1*ln(completions)(与实验2 原效果同向)
+// exp2: 元-力量底数额外 +0.1*ln(completions)(精修后 ×2)
+// 返回 Decimal:completions 超过 1e308 时 Math.log 会得到 Infinity
 function exp2CompletionBonus(){
 
     if(!game.experiments || !game.experiments.exp2)
-        return 0;
+        return new Decimal(0);
 
     let c = expCompletions("exp2");
 
-    if(c < 2)
-        return 0;
+    if(c.lt(2))
+        return new Decimal(0);
 
-    return 0.1 * Math.log(c);
+    let add =
+    c.ln().mul(0.1);
+
+    return expPaperRefined(2) ? add.mul(2) : add;
 
 }
 
 
-// exp3: 想法花费 ÷ completions^10
+// exp3: 想法花费 ÷ completions^10(精修后 ÷ completions^20)
 function exp3CompletionDivisor(){
 
     if(!game.experiments || !game.experiments.exp3)
@@ -3087,17 +3152,18 @@ function exp3CompletionDivisor(){
     let c = expCompletions("exp3");
 
     // 无效果(未重复完成)
-    if(c < 2)
+    if(c.lt(2))
         return new Decimal(1);
 
-    // 想法花费 ÷ Exp3Completions^10
     // round() 修正 break_eternity 的浮点尾巴(如 3^10=59048.999…)
-    return new Decimal(c).pow(10).round();
+    return c
+    .pow(expPaperRefined(3) ? 20 : 10)
+    .round();
 
 }
 
 
-// exp4: 所有理论力量生产 × completions^2
+// exp4: 所有理论力量生产 × completions^2(精修后 × completions^4)
 function exp4CompletionBonus(){
 
     if(!game.experiments || !game.experiments.exp4)
@@ -3105,9 +3171,9 @@ function exp4CompletionBonus(){
 
     let c = expCompletions("exp4");
 
-    if(c < 2)
+    if(c.lt(2))
         return new Decimal(1);
 
-    return new Decimal(c).pow(2);
+    return c.pow(expPaperRefined(4) ? 4 : 2);
 
 }

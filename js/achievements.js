@@ -19,6 +19,9 @@
 //   cap8h     时间碎片储量上限 → 8 小时
 //   cap12h    时间碎片储量上限 → 12 小时
 //   buyMax    全部最大按钮永久解锁(不被想法重置影响)
+//   originBuyMax 本源升级的"购买最大"按钮(等级型升级)
+//   promotorFilter 助手提拔员的四个分开关(分别控制实验1~4是否自动升级)
+//   autoStage 研究阶段随想法数自动提升(不需要研究重置)
 //   summarizerMode 解锁研究总结员的"倍数模式"(阈值 ↔ 倍数可切换)
 //   timeMode  解锁研究总结员与论文发表员的"时间"模式(按游戏时间触发)
 //   record    纯记录型(解锁内容由已有机制自动提供,仅登记)
@@ -246,10 +249,10 @@ const ACHIEVEMENT_LIST = [
         rewardDesc: "180 时间碎片",
         shards: 180,
         check: function(){
-            let total = 0;
+            let total = new Decimal(0);
             for(let i = 1; i <= 4; i++)
-                total += expCompletions("exp" + i);
-            return total >= 100;
+                total = total.add(expCompletions("exp" + i));
+            return total.gte(100);
         }
     },
     {
@@ -451,6 +454,162 @@ const ACHIEVEMENT_LIST = [
         rewardDesc: "240 时间碎片",
         shards: 240,
         check: function(){ return theoremTotal() >= 42; }
+    },
+    // ---- 第十行 ----
+    {
+        // 能力试炼每完成一次,对应能力 +1 点
+        id: "challenger",
+        name: "挑战者",
+        condDesc: "完成一个能力试炼",
+        rewardDesc: "解锁本源升级的购买最大按钮",
+        unlock: "originBuyMax",
+        check: function(){
+            if(typeof abilityLevel !== "function"
+                || typeof ABILITY_LIST === "undefined")
+                return false;
+            for(let i = 0; i < ABILITY_LIST.length; i++){
+                if(abilityLevel(ABILITY_LIST[i].key) >= 1)
+                    return true;
+            }
+            return false;
+        }
+    },
+    {
+        // "另一种无限"系列:知识(第5行)/ 灵感(第7行)/ 行动点 / 本源
+        id: "anotherInfinityII",
+        name: "另一种无限II",
+        condDesc: "达到 1.79e308 行动点",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){
+            return !!(game.actionPoints
+                && game.actionPoints.gte(KNOWLEDGE_LIMIT));
+        }
+    },
+    {
+        // 同一行的论文升级本来互相冲突,要靠本源升级「包罗万象」才可能全部在手
+        id: "allPapersOwned",
+        name: "我全都要",
+        condDesc: "同时拥有所有论文升级",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){
+            if(typeof FRONTIER_CONFIG === "undefined"
+                || typeof paperOwned !== "function")
+                return false;
+            for(let i = 0; i < FRONTIER_CONFIG.papers.length; i++){
+                if(!paperOwned(FRONTIER_CONFIG.papers[i].key))
+                    return false;
+            }
+            return FRONTIER_CONFIG.papers.length > 0;
+        }
+    },
+    {
+        id: "endlessExperiment",
+        name: "无限实验",
+        condDesc: "各实验完成次数总和达到 1.79e308",
+        rewardDesc: "解锁助手提拔员的新功能",
+        unlock: "promotorFilter",
+        check: function(){
+            if(typeof expCompletions !== "function")
+                return false;
+            let total = new Decimal(0);
+            for(let i = 1; i <= 4; i++)
+                total = total.add(expCompletions("exp" + i));
+            return total.gte(KNOWLEDGE_LIMIT);
+        }
+    },
+    {
+        id: "anotherInfinityIII",
+        name: "另一种无限III",
+        condDesc: "达到 1.79e308 本源",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){
+            return !!(game.origin
+                && game.origin.gte
+                && game.origin.gte(KNOWLEDGE_LIMIT));
+        }
+    },
+    // ---- 第十一行 ----
+    {
+        // 同一个能力试炼完成满 5 次(能力点数达到上限)
+        id: "perfectChallenger",
+        name: "完美挑战者",
+        condDesc: "完成一个能力试炼 5 次",
+        rewardDesc: "解锁自动提升研究阶段",
+        unlock: "autoStage",
+        check: function(){
+            if(typeof abilityLevel !== "function"
+                || typeof ABILITY_LIST === "undefined")
+                return false;
+            let need =
+            (typeof ABILITY_CONFIG !== "undefined")
+            ? ABILITY_CONFIG.maxLevel
+            : 5;
+            for(let i = 0; i < ABILITY_LIST.length; i++){
+                if(abilityLevel(ABILITY_LIST[i].key) >= need)
+                    return true;
+            }
+            return false;
+        }
+    },
+    {
+        // 理论等级从 0 开始,界面显示 Lv.0 / Lv.1 … 所以 Lv.999 = level 999
+        id: "theoryPeak",
+        name: "登峰造极",
+        condDesc: "将基础理论升级到 Lv.999",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){
+            let t =
+            game.theories
+            ? game.theories.theory1
+            : null;
+            return !!(t && Number(t.level) >= 999);
+        }
+    },
+    {
+        // 前 6 个试炼各完成 5 次(综合能力之外的全部)
+        id: "omniAbility",
+        name: "全能",
+        condDesc: "前 6 个能力试炼均已完成 5 次",
+        rewardDesc: "解锁新的能力试炼「综合能力」",
+        unlock: "comprehensiveTrial",
+        check: function(){
+            if(typeof abilityLevel !== "function"
+                || typeof ABILITY_CONFIG === "undefined")
+                return false;
+            let keys =
+            ABILITY_CONFIG.omniKeys || [];
+            if(keys.length === 0)
+                return false;
+            for(let i = 0; i < keys.length; i++){
+                if(abilityLevel(keys[i]) < ABILITY_CONFIG.maxLevel)
+                    return false;
+            }
+            return true;
+        }
+    },
+    {
+        // 标记由 frontier.js 的 enterFrontier() 写入
+        id: "noDifference",
+        name: "并无区别",
+        condDesc: "在综合能力试炼中进入前沿领域",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){ return !!game.compTrialFrontierDone; }
+    },
+    {
+        id: "trueOmni",
+        name: "真·全能",
+        condDesc: "完成一次综合能力试炼",
+        rewardDesc: "300 时间碎片",
+        shards: 300,
+        check: function(){
+            return (typeof abilityLevel === "function")
+            && abilityLevel("comprehensive") >= 1;
+        }
     }
 ];
 
@@ -488,6 +647,10 @@ function ensureAchievementCompat(){
     // 成就"回归基础"的达成标记(由 originReset() 写入)
     if(game.basicOnlyOriginDone === undefined)
         game.basicOnlyOriginDone = false;
+
+    // 成就"并无区别":综合能力试炼中进入过前沿领域(由 enterFrontier() 写入)
+    if(game.compTrialFrontierDone === undefined)
+        game.compTrialFrontierDone = false;
 
 }
 

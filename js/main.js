@@ -808,6 +808,13 @@ updateFrontier(dt);
 // 你的理论:理论力量自行增长 + 定理入账(第一次完成研究后解锁)
 updateOwnTheory(dt);
 
+// 本源升级"时光之力·阶梯":每秒获得等于抗压能力的完成研究次数
+updateTimeStairReset(dt);
+
+// 本源升级"时光之力·时流":每秒自动获得等于本次研究重置可得量的行动点
+// (同时计入累计行动点,所以本源公式会立刻受益)
+updateTimeFlow(dt);
+
 
 // 助手:理论研究员——自动解锁和升级理论
 if(isAssistantEnabled("theorist")){
@@ -818,6 +825,9 @@ if(isAssistantEnabled("theorist")){
 if(isAssistantEnabled("ideaSorter") && canGetIdea()){
     getIdea();
 }
+
+// 成就「完美挑战者」:研究阶段随想法数自动提升(不需要研究重置)
+updateAutoResearchStage();
 
 // 助手:研究总结员——可进行研究重置且满足触发条件时自动重置
 // (阈值模式:可获得 ≥ 阈值;倍数模式:可获得 ≥ 上次重置所得 × 倍数)
@@ -1068,6 +1078,20 @@ if(originResets() >= 1 && !game.ownTheoryStorySeen){
     saveGame();
 
     showOwnTheoryStory();
+
+    return;
+
+}
+
+
+// 首次买下本源升级"自我提升":解锁"能力试炼"(本源页第四子页)
+if(abilityUnlocked() && !game.abilityTrialStorySeen){
+
+    game.abilityTrialStorySeen = true;
+
+    saveGame();
+
+    showAbilityTrialStory();
 
     return;
 

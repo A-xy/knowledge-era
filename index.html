@@ -34,6 +34,8 @@
 
 <div id="frontierBanner" style="display:none">你现在正在前沿领域中。</div>
 
+<div id="trialBanner" style="display:none"></div>
+
 <div id="debugInfo" style="display:none" data-page-node-id="m87WqJCQinLgE3n6NdpBCm"></div>
 
 <div id="computingHint" style="display:none">计算中……</div>
@@ -487,6 +489,7 @@
 <button class="origin-tab active" data-sub="milestone">里程碑</button>
 <button class="origin-tab" data-sub="theory" id="originTheoryTab" style="display:none">你的理论</button>
 <button class="origin-tab" data-sub="upgrade" id="originUpgradeTab" style="display:none">本源升级</button>
+<button class="origin-tab" data-sub="ability" id="originAbilityTab" style="display:none">能力试炼</button>
 </div>
 
 <div id="originMilestonePage">
@@ -543,6 +546,8 @@
 
 <p>其中，有 <span id="ownTheoremUnused">0</span> 个未使用的定理，使得你的理论力量获取乘以 <span id="ownTheoremMult">1.00</span>。</p>
 
+<p id="ownTheoremOverflowRow" style="display:none">由于定理溢出，计入加成公式的有效未使用定理数为 <span id="ownTheoremEffective">200.00</span>。</p>
+
 </div>
 
 <h3>定理</h3>
@@ -561,7 +566,7 @@
 
 <p class="research-hint">
 购买定理升级会消耗定理，并把理论力量 p 重置为 1（需要重新积攒）。<br>
-「推广理论I / II」让 Effect 也作用于元-力量与行动点；「公式增强」系列逐级提高公式；两种「时光之力」互斥，只能选择其中一个。
+「推广理论I / II / III」让 Effect 也作用于元-力量、行动点与自动实验助手速度；「公式增强」系列逐级提高公式；两种「时光之力」互斥，只能选择其中一个。
 </p>
 
 <div id="theoremUpgrades"></div>
@@ -581,6 +586,26 @@
 </p>
 
 <div id="originUpgrades"></div>
+
+</div>
+
+<div id="originAbilityPage" style="display:none">
+
+<h3>能力试炼</h3>
+
+<p class="research-hint">
+进入和退出能力试炼都会自动进行一次本源重置:如果当时达到了本源重置的条件,会正常获得本源与完成次数;否则只是重置,不获得本源。
+</p>
+
+<p class="research-hint">
+每完成一次对应的能力试炼,可以获得 1 点该能力,最多完成 5 次。能力带来的加成,在对应的能力试炼中会失效。
+</p>
+
+<p class="research-hint">
+前 6 个能力的试炼都完成 5 次后(成就「全能」),会解锁最后一个试炼:综合能力。
+</p>
+
+<div id="abilityCards"></div>
 
 </div>
 
@@ -715,7 +740,7 @@
 <div id="aboutIntroPage">
 
 <p class="research-hint">
-知识纪元是一款科研主题的增量游戏。点击各标题可展开或收起对应说明。
+知识纪元是A_xy制作的第一款增量游戏，一款关于知识和科研主题的增量游戏。游戏QQ群369932204。点击各标题可展开或收起对应说明。
 </p>
 
 <div id="aboutIntroPanel">
@@ -724,6 +749,16 @@
 </div>
 
 <div id="aboutChangelogPage" style="display:none">
+
+<div class="changelog-entry">
+<h3>V1.1 培养能力 <span class="changelog-date">2026/11/22</span></h3>
+<ul>
+<li>新增了7个能力试炼,也就是挑战</li>
+<li>增加了更多的本源升级和你的理论升级</li>
+<li>增加了论文升级的精修功能</li>
+<li>增加了10个新成就</li>
+</ul>
+</div>
 
 <div class="changelog-entry">
 <h3>V1.0.1 小更新 <span class="changelog-date">2026/11/12</span></h3>
@@ -894,6 +929,8 @@
 <script src="js/frontier.js"></script>
 
 <script src="js/origin.js"></script>
+
+<script src="js/ability.js"></script>
 
 <script src="js/experiment.js"></script>
 

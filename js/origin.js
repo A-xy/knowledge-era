@@ -93,10 +93,12 @@ const ORIGIN_CONFIG = {
             n: 30,
             id: "endlessStair2",
             name: "无尽阶梯II",
-            desc: "本源获取 ×(1+完成研究次数/30),完成 300 次研究时达到上限",
+            desc: "本源获取 ×(1+完成研究次数/30),完成 300 次研究时达到上限" +
+                  "(本源升级「时光之力·阶梯」可移除该上限)",
             // 点亮后追加"当前实际倍率"(随完成次数变化)
             detail: function(){
-                return " ｜ 当前 ×" + format(originStaircaseBonus());
+                return " ｜ 当前 ×" + format(originStaircaseBonus()) +
+                (originUpgradeActive("timeStair") ? "(上限已移除)" : "");
             }
         }
     ]
@@ -125,6 +127,15 @@ const OWN_THEORY_CONFIG = {
     baseRate: 0.1,       // 理论力量基础获取速率(每秒)
     theoremMult: 2,      // 每个未使用定理使获取速率 ×2
     theoremMultBoost: 2.5, // 升级"倍率增强"后改为 ×2.5
+    theoremMultBoostII: 3, // 升级"倍率增强II"后改为 ×3
+
+    // 定理溢出:未使用定理超过该值后,计入加成公式的有效数量
+    // 改为 sqrt(x * theoremOverflowAt)(增长从线性降为平方根)
+    // 升级"理论扩充"把起点再往后推 theoremOverflowBoost 个
+    theoremOverflowAt: 200,
+    theoremOverflowBoost: 100,
+    // 升级"理论扩充II"再往后推这么多(300 → 400)
+    theoremOverflowBoostII: 100,
     knowledgeBase: 600,  // 第 n 个定理需要 10^(knowledgeBase*n) 知识
     apBase: 40,          // 第 n 个定理需要 10^(apBase*n) 累计行动点
     originBase: 2,       // 第 n 个定理需要 originBase^n 累计本源
@@ -152,6 +163,15 @@ const OWN_THEORY_CONFIG = {
             require: ["propagateI"]
         },
         {
+            key: "propagateIII",
+            name: "推广理论III",
+            desc: "你的理论也加成所有自动实验助手的速度",
+            cost: 3000,
+            require: ["propagateII"],
+            // 额外要求:5 点领导力(不消耗能力点数)
+            requireAbility: { key: "leadership", level: 5 }
+        },
+        {
             key: "formulaI",
             name: "公式增强I",
             desc: "将公式升级为 Effect = p*ln(p)",
@@ -176,6 +196,29 @@ const OWN_THEORY_CONFIG = {
             name: "倍率增强",
             desc: "每个未使用的定理对理论力量的加成提升到 2.5 倍",
             cost: 3
+        },
+        {
+            key: "theoremBoostII",
+            name: "倍率增强II",
+            desc: "每个未使用的定理对理论力量的加成提升到 3 倍",
+            cost: 300
+        },
+        {
+            key: "theoremExpand",
+            name: "理论扩充",
+            // 文案写死数值:此处还在对象字面量里,不能读 OWN_THEORY_CONFIG
+            // (起点 200 + theoremOverflowBoost 100)
+            desc: "定理溢出的起点提升 100(200 → 300)",
+            cost: 300
+        },
+        {
+            key: "theoremExpandII",
+            name: "理论扩充II",
+            // 文案写死数值(此处仍在对象字面量里,不能读 OWN_THEORY_CONFIG)
+            // (起点 300 + theoremOverflowBoostII 100)
+            desc: "定理溢出的起点再提升 100(300 → 400)",
+            cost: 1000,
+            require: ["theoremExpand"]
         },
         {
             key: "timeFast",
@@ -220,7 +263,7 @@ const ORIGIN_UPGRADE_LIST = [
         type: "once",
         cost: new Decimal(10),
         desc: "移除里程碑「基础研究」「无尽阶梯」的加成上限;" +
-              "研究重置次数 ×floor(√(累计本源+1))",
+              "研究重置次数 ×floor(√(累计本源+1))，最高1e15倍",
         activeText: function(){
             return "当前:研究重置次数 ×" +
             format(trueStaircaseMult());
@@ -281,17 +324,112 @@ const ORIGIN_UPGRADE_LIST = [
         }
     },
     {
-        // 终点标记:买下它代表这个版本已经玩到头了,
-        // 实际能力留到下个版本实装(所以这里只置位、不给任何加成)
+        // 终点标记 + 下个层级的入口:购买后解锁本源页第四子页「能力试炼」
         key: "selfImprove",
         name: "自我提升",
         type: "once",
         cost: new Decimal("1e28"),
-        desc: "解锁能力(暂未实装)。" +
-              "买到它就意味着本版本的内容已经走完,后续版本将由此继续",
+        desc: "解锁能力",
         activeText: function(){
-            return "已解锁能力槽位(暂未实装)";
+            return "已解锁能力试炼";
         }
+    },
+    {
+        // 能力试炼的奖励:把"完成研究次数"变成一种随时间自动增长的量,
+        // 于是无尽阶梯II 的倍率不再被 300 次封顶
+        key: "timeStair",
+        name: "时光之力·阶梯",
+        type: "once",
+        cost: new Decimal("1e30"),
+        // 额外解锁条件:至少完成 1 次抗压能力试炼
+        requireAbility: { key: "compress", level: 1 },
+        desc: "移除里程碑「无尽阶梯II」的加成上限;" +
+              "每秒获得等于抗压能力点数的完成研究次数",
+        activeText: function(){
+            return "当前:每秒 +" + abilityLevel("compress") +
+                   " 次完成研究";
+        }
+    },
+    {
+        // 用"本次研究花的时间"换本源收益:时间越长收益越高(最少 ×1)
+        key: "timeOrigin",
+        name: "时光之力·本源",
+        type: "once",
+        cost: new Decimal("1e150"),
+        requireAbility: { key: "compress", level: 3 },
+        desc: "本源获取 × 本次本源重置的秒数(最少为 1)",
+        // 数值每秒在变 → 走 span 轻量刷新,不进结构签名
+        activeText: function(){
+            return "当前:×<span id=\"originTimeOriginVal\">" +
+                   format(timeOriginMult()) + "</span>";
+        }
+    },
+    {
+        // 把"同一行只能选一个"的限制整体放开(不必逐个放行)
+        key: "allPapers",
+        name: "包罗万象",
+        type: "once",
+        cost: new Decimal("1e40"),
+        requireAbility: { key: "text", level: 1 },
+        desc: "所有论文升级都不再会冲突"
+    },
+    {
+        // 多元论文那三个本来就不冲突,精修时也不占名额
+        key: "multiPaperII",
+        name: "多元论文II",
+        type: "once",
+        cost: new Decimal("1e50"),
+        requireAbility: { key: "text", level: 1 },
+        desc: "精修「多元论文」中提到的三个论文升级不再占用精修数量"
+    },
+    {
+        // 让本源的研究阶段加成与里程碑「跨学科研究」共用同一个底数
+        key: "equivalentModel",
+        name: "等效模型",
+        type: "once",
+        cost: new Decimal("1e390"),
+        requireAbility: { key: "comprehension", level: 3 },
+        desc: "每个研究阶段对本源获取提升的倍数也受「底数提升1」加成",
+        currentText: function(){
+            return "当前底数 " + baseNumberText(originStageBase());
+        },
+        activeText: function(lv){
+            return "当前底数 " + baseNumberText(originStageBase());
+        }
+    },
+    {
+        // 每秒白送行动点:数量 = 当前做一次研究重置能拿到的行动点
+        key: "timeFlow",
+        name: "时光之力·时流",
+        type: "once",
+        cost: new Decimal("1e2500"),
+        requireAbility: { key: "compress", level: 5 },
+        desc: "每秒自动获得行动点,数量等于当前研究重置时可获取的量" +
+              "(同时计入累计行动点)",
+        // 速率随知识增长而变 → 走 span 轻量刷新,不进结构签名
+        activeText: function(){
+            return "当前:每秒 +<span id=\"originTimeFlowVal\">" +
+                   format(timeFlowRate()) + "</span> 行动点";
+        }
+    },
+    {
+        // 精修不再受文本能力点数限制
+        key: "allPapersII",
+        name: "包罗万象II",
+        type: "once",
+        cost: new Decimal("1e1200"),
+        requireAbility: { key: "text", level: 5 },
+        desc: "精修论文升级不再有数量限制"
+    },
+    {
+        // 不在前沿领域也能攒灵感(速率为知识产率的 2/3 次方)
+        key: "ideaSpring",
+        name: "思如泉涌",
+        type: "once",
+        cost: new Decimal("1e2900"),
+        requireAbility: { key: "comprehension", level: 5 },
+        desc: "不在前沿领域中时也可以获取灵感," +
+              "获取速率等于知识产率的 2/3 次方"
     }
 ];
 
@@ -353,6 +491,17 @@ function ensureOriginCompat(){
             enabled: true
         };
     }
+
+    // 助手提拔员的四个分开关(成就「无限实验」解锁后可用)
+    // 分别控制是否自动升级实验1~4的自动助手;缺字段视为全部开启,
+    // 老存档升级后行为不变
+    if(!game.assistants.promotor.autoUpgrade
+        || typeof game.assistants.promotor.autoUpgrade !== "object")
+        game.assistants.promotor.autoUpgrade = {};
+
+    // "时光之力·阶梯":每秒 +N 次完成研究的小数余额
+    if(game.stairTimeAcc === undefined)
+        game.stairTimeAcc = 0;
 
     // 论文发表员(本源里程碑"自动发表"解锁显示)
     // 阈值与研究总结员一样以**字符串**存储,支持科学计数法
@@ -534,7 +683,26 @@ function originGain(){
     .mul(originStaircaseBonus())
     // 本源升级"深入本源":×2^等级
     .mul(deepOriginMult())
+    // 本源升级"时光之力·本源":× 本次研究的秒数(最少 1)
+    .mul(timeOriginMult())
     .floor();
+
+}
+
+
+// 本源升级"时光之力·本源":本源获取 × 本次本源重置的秒数(最少为 1)
+// 秒数 = 距上次完成研究的游戏时间(与 T(t)、论文发表员同一口径)
+function timeOriginMult(){
+
+    if(!originUpgradeActive("timeOrigin"))
+        return new Decimal(1);
+
+    let t =
+    (typeof originCycleElapsed === "function")
+    ? originCycleElapsed()
+    : 0;
+
+    return new Decimal(Math.max(1, t));
 
 }
 
@@ -564,11 +732,25 @@ function originGainBase(){
 }
 
 
-// 研究阶段加成:×2^(研究阶段 - 10);阶段不足 10 时 ×1
+// 研究阶段加成的底数:默认 2
+// 本源升级「等效模型」后与里程碑「跨学科研究」共用同一个底数
+// (即「底数提升1」的加成同样作用于本源;初始底数同样是 2)
+function originStageBase(){
+
+    if(!originUpgradeActive("equivalentModel"))
+        return new Decimal(2);
+
+    return (typeof stageAPBase === "function")
+    ? stageAPBase()
+    : new Decimal(2);
+
+}
+
+
+// 研究阶段加成:×底数^(研究阶段 - 10);阶段不足 10 时 ×1
 function originGainStageMult(){
 
-    return Decimal.pow(
-        2,
+    return originStageBase().pow(
         Math.max(
             (game.researchStage || 0) - ORIGIN_CONFIG.stageBase,
             0
@@ -592,22 +774,111 @@ function originGainPendingAP(){
 
 // 本源里程碑"无尽阶梯II"(完成 30 次研究):本源获取 ×(1+完成次数/30)
 // 完成次数 300 封顶 → ×11;未点亮时 ×1
+// 本源升级"时光之力·阶梯":取消这个上限(完成次数会自己往上涨)
 function originStaircaseBonus(){
 
     if(!originMilestoneActive(30))
         return new Decimal(1);
 
     let n =
-    Math.min(
-        originResets(),
-        ORIGIN_CONFIG.staircaseCap
-    );
+    originResets();
+
+    if(!originUpgradeActive("timeStair"))
+        n = Math.min(n, ORIGIN_CONFIG.staircaseCap);
 
     return new Decimal(1)
     .add(
         new Decimal(n)
         .div(ORIGIN_CONFIG.staircaseDivisor)
     );
+
+}
+
+
+// 本源升级"时光之力·阶梯":每秒获得的完成研究次数
+// = 抗压能力点数(没买升级时为 0)
+function timeStairResetRate(){
+
+    if(!originUpgradeActive("timeStair"))
+        return 0;
+
+    if(typeof abilityLevel !== "function")
+        return 0;
+
+    return abilityLevel("compress");
+
+}
+
+
+// 把"每秒 +N 次完成研究"结算进 game.originResets
+// (攒够 1 次才入账,小数留在 stairTimeAcc 里,不按帧取整丢进度)
+function updateTimeStairReset(dt){
+
+    let rate =
+    timeStairResetRate();
+
+    if(rate <= 0)
+        return;
+
+    game.stairTimeAcc =
+    (game.stairTimeAcc || 0) + dt * rate;
+
+    if(game.stairTimeAcc < 1)
+        return;
+
+    let add =
+    Math.floor(game.stairTimeAcc);
+
+    game.stairTimeAcc -= add;
+
+    game.originResets =
+    originResets() + add;
+
+}
+
+
+// ============================================================
+// 本源升级"时光之力·时流":每秒自动获得行动点
+// 数量 = 当前做一次研究重置能拿到的行动点(actionPointsGain,
+// 含阶段倍率 / 元-力量 / 你的理论等全部加成)
+// ============================================================
+function timeFlowRate(){
+
+    if(!originUpgradeActive("timeFlow"))
+        return new Decimal(0);
+
+    if(typeof actionPointsGain !== "function")
+        return new Decimal(0);
+
+    return actionPointsGain();
+
+}
+
+
+// 每 tick 结算时流:行动点与累计行动点一起增加
+// (累计行动点是本源公式的输入,所以时流会直接推动本源)
+function updateTimeFlow(dt){
+
+    if(!(dt > 0))
+        return;
+
+    let rate =
+    timeFlowRate();
+
+    if(rate.lte(0))
+        return;
+
+    let add =
+    rate.mul(dt);
+
+    if(add.lte(0))
+        return;
+
+    game.actionPoints =
+    (game.actionPoints || new Decimal(0)).add(add);
+
+    game.totalResearchPoints =
+    (game.totalResearchPoints || new Decimal(0)).add(add);
 
 }
 
@@ -683,6 +954,52 @@ function theoremUnused(){
 }
 
 
+// 定理溢出的起点(默认 200;「理论扩充」+100,「理论扩充II」再 +100)
+function theoremOverflowAt(){
+
+    let at =
+    OWN_THEORY_CONFIG.theoremOverflowAt;
+
+    if(theoremUpgradeOwned("theoremExpand"))
+        at += OWN_THEORY_CONFIG.theoremOverflowBoost;
+
+    if(theoremUpgradeOwned("theoremExpandII"))
+        at += OWN_THEORY_CONFIG.theoremOverflowBoostII;
+
+    return at;
+
+}
+
+
+// 定理是否已溢出(未使用定理超过阈值)
+function theoremOverflowed(){
+
+    return theoremUnused()
+    > theoremOverflowAt();
+
+}
+
+
+// 计入加成公式的有效未使用定理数
+//   x <= 阈值 : x(线性)
+//   x >  阈值 : sqrt(x * 阈值)
+// 阈值处两者相等(连续),之后增长从线性降为平方根
+function theoremUnusedEffective(){
+
+    let x =
+    theoremUnused();
+
+    let at =
+    theoremOverflowAt();
+
+    if(!(at > 0) || x <= at)
+        return x;
+
+    return Math.sqrt(x * at);
+
+}
+
+
 // 是否购买了某个定理升级
 function theoremUpgradeOwned(key){
 
@@ -692,8 +1009,12 @@ function theoremUpgradeOwned(key){
 }
 
 
-// 每个未使用定理的倍率(「倍率增强」后为 2.5)
+// 每个未使用定理的倍率
+// 「倍率增强II」→ 3;「倍率增强」→ 2.5;都没买 → 2
 function ownTheoryTheoremMult(){
+
+    if(theoremUpgradeOwned("theoremBoostII"))
+        return OWN_THEORY_CONFIG.theoremMultBoostII;
 
     return theoremUpgradeOwned("theoremBoost")
     ? OWN_THEORY_CONFIG.theoremMultBoost
@@ -702,16 +1023,22 @@ function ownTheoryTheoremMult(){
 }
 
 
-// 理论力量获取速率 = 0.1 × 定理倍率^(未使用定理)
-// 不受元-力量 / 研究里程碑 / 论文等任何外部加成影响
+// 理论力量获取速率 = 0.1 × 定理倍率^(有效未使用定理) × 元-力量效果8
+// 有效未使用定理见 theoremUnusedEffective(超过 200 后按 sqrt(x*200) 计入)
+// 效果8("你的理论加成"):论文"引言"精修 + 118 想法解锁,未解锁时 ×1
 function ownTheoryRate(){
 
     return new Decimal(OWN_THEORY_CONFIG.baseRate)
     .mul(
         Decimal.pow(
             ownTheoryTheoremMult(),
-            theoremUnused()
+            theoremUnusedEffective()
         )
+    )
+    .mul(
+        (typeof metaOwnTheoryBonus === "function")
+        ? metaOwnTheoryBonus()
+        : 1
     );
 
 }
@@ -756,14 +1083,23 @@ function ownTheoryFormulaBaseText(){
 }
 
 
-// 完整公式文本(买了时光之力后末尾多一项 T(t))
+// 完整公式文本(买了时光之力后末尾多一项 T(t);抗压能力再给它加上指数)
 function ownTheoryFormulaText(){
 
     let text =
     ownTheoryFormulaBaseText();
 
-    if(ownTheoryTimePower())
-        text += " * T(t)";
+    if(ownTheoryTimePower()){
+
+        let exponent =
+        (typeof abilityTimeExponent === "function")
+        ? abilityTimeExponent() : 1;
+
+        text += (exponent === 1)
+        ? " * T(t)"
+        : " * T(t)^" + exponent;
+
+    }
 
     return text;
 
@@ -801,12 +1137,19 @@ function ownTheoryElapsed(){
 // T(t):未购买时光之力时为 1
 //   迅速:T(t) = min(1000, 90000/t)   —— 完成研究后立刻给出高倍率,随后衰减
 //   持久:T(t) = t                     —— 需要重新累积时间
-function ownTheoryTimeMult(){
+// 抗压能力试炼中:时光之力整体失效(T(t) = 1)
+// ⚠ 这里返回的是 **T(t) 本身**,不含抗压能力的次方加成
+//   (界面上"你的理论"页显示的就是它;次方在公式里,见 ownTheoryTimeMult)
+function ownTheoryTimeBase(){
 
     let key =
     ownTheoryTimePower();
 
     if(!key)
+        return new Decimal(1);
+
+    if(typeof trialActive === "function"
+        && trialActive("compress"))
         return new Decimal(1);
 
     let t =
@@ -827,6 +1170,25 @@ function ownTheoryTimeMult(){
     }
 
     return new Decimal(t);
+
+}
+
+
+// 实际乘进 Effect 的倍率 = T(t)^(抗压能力+1)
+function ownTheoryTimeMult(){
+
+    let base =
+    ownTheoryTimeBase();
+
+    let exponent =
+    (typeof abilityTimeExponent === "function")
+    ? abilityTimeExponent() : 1;
+
+    if(exponent === 1)
+        return base;
+
+    // T(t) = 0(持久且还没攒时间)时 0^n 仍是 0,没有问题
+    return base.pow(exponent);
 
 }
 
@@ -889,7 +1251,17 @@ function ownTheoryAPEffect(){
 }
 
 
-// 效果作用范围文本(知识 → 知识/元-力量 → 知识/元-力量/行动点)
+// 自动实验助手速度倍率(未买「推广理论III」时 ×1)
+function ownTheoryExpAssistantEffect(){
+
+    return theoremUpgradeOwned("propagateIII")
+    ? ownTheoryEffect()
+    : new Decimal(1);
+
+}
+
+
+// 效果作用范围文本(知识 → 知识/元-力量 → 知识/元-力量/行动点 → 再加助手)
 function ownTheoryTargetText(){
 
     let parts = ["知识产出"];
@@ -899,6 +1271,9 @@ function ownTheoryTargetText(){
 
     if(theoremUpgradeOwned("propagateII"))
         parts.push("行动点产出");
+
+    if(theoremUpgradeOwned("propagateIII"))
+        parts.push("自动实验助手速度");
 
     if(parts.length === 1)
         return parts[0];
@@ -1089,6 +1464,32 @@ function theoremUpgradeLockReason(key){
 
     }
 
+    // 能力点数要求(不消耗点数)
+    if(conf.requireAbility){
+
+        let ra =
+        conf.requireAbility;
+
+        let lv =
+        (typeof abilityLevel === "function")
+        ? abilityLevel(ra.key)
+        : 0;
+
+        if(lv < ra.level){
+
+            let rconf =
+            (typeof abilityConf === "function")
+            ? abilityConf(ra.key)
+            : null;
+
+            return "需要 " + ra.level + " 点" +
+            (rconf ? rconf.name : ra.key) +
+            "（当前 " + lv + " 点）";
+
+        }
+
+    }
+
     // 互斥组:同组只能买一个
     if(conf.exclusive){
 
@@ -1210,6 +1611,47 @@ function originUpgradeConf(key){
 }
 
 
+// 升级的额外解锁条件(目前只有「时光之力·阶梯」要求先完成抗压能力试炼)
+function originUpgradeRequireMet(conf){
+
+    if(!conf || !conf.requireAbility)
+        return true;
+
+    if(typeof abilityLevel !== "function")
+        return false;
+
+    let need =
+    conf.requireAbility;
+
+    return abilityLevel(need.key) >= need.level;
+
+}
+
+
+// 条件不满足时的提示文案(带当前值)
+function originUpgradeRequireText(conf){
+
+    if(!conf || !conf.requireAbility)
+        return "";
+
+    let need =
+    conf.requireAbility;
+
+    let name =
+    (typeof abilityConf === "function" && abilityConf(need.key))
+    ? abilityConf(need.key).name
+    : need.key;
+
+    let cur =
+    (typeof abilityLevel === "function")
+    ? abilityLevel(need.key) : 0;
+
+    return "需要 " + need.level + " 点" + name +
+           "(当前 " + cur + " 点)";
+
+}
+
+
 // 升级等级:一次性升级为 1/0,可叠加升级为实际等级
 function originUpgradeLevel(key){
 
@@ -1284,6 +1726,10 @@ function buyOriginUpgrade(key){
     if(conf.type === "once" && originUpgradeActive(key))
         return "owned";
 
+    // 额外解锁条件(能力试炼进度)
+    if(!originUpgradeRequireMet(conf))
+        return "require";
+
     let cost =
     originUpgradeCost(key);
 
@@ -1311,6 +1757,72 @@ function buyOriginUpgrade(key){
     renderOriginPage();
 
     return "ok";
+
+}
+
+
+// 本源升级的"购买最大"按钮是否已解锁
+// 成就「挑战者」(完成一个能力试炼)解锁,永久有效
+function originBuyMaxUnlocked(){
+
+    return (typeof isAchievementUnlocked === "function")
+    && isAchievementUnlocked("challenger");
+
+}
+
+
+// 一次买到买不动为止(只对等级型升级有效)
+// 返回买到的等级数(0 = 一级都买不起 / 条件不满足 / 该升级不可叠加)
+//
+// 逐级累加而不是解析求和:价格按 costGrowth 指数增长,
+// 一般几十级就买不动了,循环开销可以忽略;循环上限只是防呆。
+function buyOriginUpgradeMax(key){
+
+    let conf =
+    originUpgradeConf(key);
+
+    if(!conf || conf.type !== "level")
+        return 0;
+
+    if(!originBuyMaxUnlocked())
+        return 0;
+
+    if(!originUpgradeRequireMet(conf))
+        return 0;
+
+    if(!game.originUpgrades)
+        game.originUpgrades = {};
+
+    let bought = 0;
+
+    while(bought < 10000){
+
+        let cost =
+        originUpgradeCost(key);
+
+        if(origin().lt(cost))
+            break;
+
+        game.origin = origin().sub(cost);
+
+        game.originUpgrades[key] = originUpgradeLevel(key) + 1;
+
+        bought++;
+
+    }
+
+    if(bought <= 0)
+        return 0;
+
+    // "深入本源"每级都让论文发表员的阈值 ×2(与单级购买一致)
+    if(key === "deepOrigin")
+        syncPublisherThreshold(Decimal.pow(2, bought).round());
+
+    saveGame();
+
+    renderOriginPage();
+
+    return bought;
 
 }
 
@@ -1467,9 +1979,21 @@ function originReset(auto){
         && !confirm("完成研究将重置研究进度,确定继续吗?(可在按钮下方关闭此确认)"))
         return false;
 
+    return applyOriginReset(true);
+
+}
+
+
+// 执行一次本源重置
+//   normal = 是否满足本源重置的条件(持有论文「结论」)
+//     正常:结算本源与完成次数(与点"完成研究"完全一致)
+//     不满足:只重置进度,不获得本源,也不计入完成次数
+// 能力试炼的进入/退出走这里(见 ability.js 的 trialOriginReset)
+function applyOriginReset(normal){
+
     // ---- 1. 先结算本源与次数 ----
     let gain =
-    originGain();
+    normal ? originGain() : new Decimal(0);
 
     // 本轮用时要按"清零前"的起算时间算,所以先记录再更新 lastOriginResetTime
     let runStart =
@@ -1481,13 +2005,21 @@ function originReset(auto){
     : Math.max(0, (game.totalTime || 0) - runStart);
 
     // 上一次完成研究的快照(完成研究按钮下方的第二行统计)
-    game.lastOriginRunTime = runTime;
-    game.lastOriginRunGain = gain;
+    // 不满足条件的那次重置不覆盖快照,免得把正常数据冲掉
+    if(normal){
 
-    // 成就"回归基础":本轮从未解锁过理论2~5 → 记下达成标记
-    // (理论上解锁过 → 不再判定;随后清零,开始下一轮的记录)
-    if(!game.theory25ThisRun)
-        game.basicOnlyOriginDone = true;
+        game.lastOriginRunTime = runTime;
+        game.lastOriginRunGain = gain;
+
+        // 成就"回归基础":本轮从未解锁过理论2~5 → 记下达成标记
+        // (理论上解锁过 → 不再判定;随后清零,开始下一轮的记录)
+        if(!game.theory25ThisRun)
+            game.basicOnlyOriginDone = true;
+
+        game.originResets =
+        originResets() + 1;
+
+    }
 
     game.theory25ThisRun = false;
 
@@ -1497,9 +2029,6 @@ function originReset(auto){
 
     game.origin =
     origin().add(gain);
-
-    game.originResets =
-    originResets() + 1;
 
     // 累计本源:只记"获得过多少",不扣消耗(给"你的理论"的定理门槛用)
     game.totalOrigin =
@@ -1581,7 +2110,7 @@ function originReset(auto){
         if(!e)
             continue;
 
-        e.completions = expStart;
+        e.completions = new Decimal(expStart);
 
         // 只清"本轮"的操作记录:
         // operationCount 不清的话,下次完成时它会从上轮累计值起算,
@@ -1630,6 +2159,10 @@ function originReset(auto){
     renderResearchPage();
     renderFrontierPage();
     renderOriginPage();
+
+    // 能力试炼(进入/退出试炼时也走这条路,试炼状态本身不受重置影响)
+    if(typeof renderAbilityPage === "function")
+        renderAbilityPage();
 
     // ---- 10. 结算成就 ----
     // 完成研究本身可能立即达成成就(如「新起点」),不必等下一帧
@@ -1785,6 +2318,15 @@ function renderOriginPage(){
         upgradeTab.style.display =
         ownTheoryUnlocked() ? "" : "none";
 
+    // 第四子页「能力试炼」:买下本源升级「自我提升」后才出现
+    let abilityTab =
+    document.getElementById("originAbilityTab");
+
+    if(abilityTab)
+        abilityTab.style.display =
+        (typeof abilityUnlocked === "function"
+            && abilityUnlocked()) ? "" : "none";
+
     // 数值逐帧刷新(只改 textContent,不进任何重建签名)
     refreshOwnTheoryNumbers();
 
@@ -1793,6 +2335,10 @@ function renderOriginPage(){
 
     // 本源升级卡片(仅等级/购买状态变化时重建)
     renderOriginUpgrades();
+
+    // 能力试炼子页(第四子页;含游戏界面顶部的试炼提示)
+    if(typeof renderAbilityPage === "function")
+        renderAbilityPage();
 
     // ---- 里程碑(完成次数变化 → 重建) ----
     let box =
@@ -1961,7 +2507,26 @@ function refreshOwnTheoryNumbers(){
     originSetText("ownTheoremTotal", theoremTotal());
     originSetText("ownTheoremUnused", theoremUnused());
     originSetText("ownTheoremMult",
-        format(Decimal.pow(ownTheoryTheoremMult(), theoremUnused())));
+        format(Decimal.pow(ownTheoryTheoremMult(),
+            theoremUnusedEffective())));
+
+    // 定理溢出提示:未使用定理超过阈值后才出现
+    // (数值每帧在变,这里只做显示切换,不进结构签名)
+    let overflowRow =
+    document.getElementById("ownTheoremOverflowRow");
+
+    if(overflowRow){
+
+        let overflowed =
+        theoremOverflowed();
+
+        overflowRow.style.display = overflowed ? "" : "none";
+
+        if(overflowed)
+            originSetText("ownTheoremEffective",
+                format(theoremUnusedEffective()));
+
+    }
 
     // ---- 时光之力(T(t))----
     // 只有买过才显示这一行;t 每帧都在变,同样走轻量刷新
@@ -1979,13 +2544,21 @@ function refreshOwnTheoryNumbers(){
         originSetText("ownTheoryTimeName",
             timeKey === "timeFast" ? "迅速" : "持久");
 
-        originSetText("ownTheoryTimeFormula",
-            timeKey === "timeFast"
-            ? "min(1000, 90000/t)"
-            : "t");
+        // 抗压能力试炼中时光之力整体失效 → 公式直接显示 1
+        let disabled =
+        (typeof trialActive === "function"
+            && trialActive("compress"));
 
+        originSetText("ownTheoryTimeFormula",
+            disabled
+            ? "1(试炼中失效)"
+            : (timeKey === "timeFast"
+                ? "min(1000, 90000/t)"
+                : "t"));
+
+        // 这里就是 T(t) 本身:抗压能力的次方写在公式里(见 ownTheoryFormulaText)
         originSetText("ownTheoryTimeValue",
-            format(ownTheoryTimeMult()));
+            format(ownTheoryTimeBase()));
 
         originSetText("ownTheoryElapsed",
             Math.floor(ownTheoryElapsed()));
@@ -2031,7 +2604,10 @@ function renderTheoremUpgrades(){
     OWN_THEORY_CONFIG.upgrades.map(function(c){
         return (game.theoremUpgrades && game.theoremUpgrades[c.key])
             ? 1 : 0;
-    }).join(":");
+    }).join(":") +
+    // 「推广理论III」要求 5 点领导力 → 卡片上的锁定原因要跟着变
+    ":ld" + ((typeof abilityLevel === "function")
+        ? abilityLevel("leadership") : 0);
 
     if(key !== lastTheoremUpgradeKey){
 
@@ -2175,7 +2751,23 @@ function renderOriginUpgrades(){
     ORIGIN_UPGRADE_LIST.map(function(c){
         return originUpgradeLevel(c.key);
     }).join(":") +
-    ":st" + trueStaircaseMult().toString();
+    ":st" + trueStaircaseMult().toString() +
+    // 能力等级会改变"需要 1 点抗压能力(当前 N 点)"的文案
+    ":ca" + ((typeof abilityLevel === "function")
+        ? abilityLevel("compress") : 0) +
+    ":ct" + ((typeof abilityLevel === "function")
+        ? abilityLevel("text") : 0) +
+    // 「等效模型」要求 3 点理解力,提示里的"当前 N 点"要跟着变
+    ":cp" + ((typeof abilityLevel === "function")
+        ? abilityLevel("comprehension") : 0) +
+    // 能力「领导力」放大「底数提升2」的每级效果(试炼中失效):
+    // 升级 / 进出领导力试炼都要刷新卡片上的"当前底数"
+    ":ld" + ((typeof abilityLevel === "function")
+        ? abilityLevel("leadership") : 0) +
+    ":lt" + ((typeof trialActive === "function"
+        && trialActive("leadership")) ? 1 : 0) +
+    // 成就「挑战者」解锁的"购买最大"按钮(解锁后要补上按钮)
+    ":bm" + (originBuyMaxUnlocked() ? 1 : 0);
 
     if(key !== lastOriginUpgradeKey){
 
@@ -2244,12 +2836,22 @@ function renderOriginUpgrades(){
             "<span class=\"theorem-cost\">" + costText + "</span>" +
             "</div>" +
             "<div class=\"theorem-desc\">" + conf.desc + "</div>" +
+            // 额外条件没达成时,把"需要什么"写清楚
+            ((!done && !originUpgradeRequireMet(conf))
+                ? "<div class=\"theorem-owned\">" +
+                  originUpgradeRequireText(conf) + "</div>"
+                : "") +
             extra +
             (done
                 ? ""
                 : "<button class=\"theorem-btn\" data-key=\"" + conf.key + "\">" +
                   (isLevel ? "升级(" : "购买(") +
-                  format(cost) + " 本源)</button>");
+                  format(cost) + " 本源)</button>" +
+                  // 等级型升级:成就「挑战者」解锁后可一键买到买不动为止
+                  ((isLevel && originBuyMaxUnlocked())
+                    ? "<button class=\"theorem-btn max\" data-key-max=\"" +
+                      conf.key + "\">购买最大</button>"
+                    : ""));
 
             box.appendChild(div);
 
@@ -2266,6 +2868,19 @@ function renderOriginUpgrades(){
                 });
             }
 
+            let maxBtn =
+            div.querySelector
+            ? div.querySelector(".theorem-btn.max")
+            : null;
+
+            if(maxBtn){
+                maxBtn.addEventListener("click", function(){
+                    buyOriginUpgradeMax(
+                        this.getAttribute("data-key-max")
+                    );
+                });
+            }
+
         }
 
     }
@@ -2278,20 +2893,61 @@ function renderOriginUpgrades(){
 
         let card = box.children[i];
 
-        let btn =
+        // 「时光之力·本源」的当前倍率每秒都在变 → 只改文本,不重建卡片
+        let liveVal =
         card.querySelector
-        ? card.querySelector(".theorem-btn")
+        ? card.querySelector("#originTimeOriginVal")
         : null;
 
-        if(!btn)
-            continue;
+        if(liveVal){
 
-        let conf =
-        originUpgradeConf(btn.getAttribute("data-key"));
+            let s =
+            format(timeOriginMult());
 
-        if(conf)
-            btn.disabled =
-            origin().lt(originUpgradeCost(conf.key));
+            if(liveVal.innerText !== s)
+                liveVal.innerText = s;
+
+        }
+
+        // 「时光之力·时流」的每秒行动点同理(随知识增长持续变大)
+        let flowVal =
+        card.querySelector
+        ? card.querySelector("#originTimeFlowVal")
+        : null;
+
+        if(flowVal){
+
+            let s =
+            format(timeFlowRate());
+
+            if(flowVal.innerText !== s)
+                flowVal.innerText = s;
+
+        }
+
+        // 卡片里可能有 1~2 个按钮(升级 / 购买最大)
+        let btns =
+        card.querySelectorAll
+        ? card.querySelectorAll(".theorem-btn")
+        : [];
+
+        for(let j = 0; j < btns.length; j++){
+
+            let btn = btns[j];
+
+            let key =
+            btn.getAttribute("data-key")
+            || btn.getAttribute("data-key-max");
+
+            let conf =
+            originUpgradeConf(key);
+
+            if(conf)
+                btn.disabled =
+                origin().lt(originUpgradeCost(conf.key))
+                || !originUpgradeRequireMet(conf);
+
+        }
 
     }
 
@@ -2312,7 +2968,8 @@ function renderOriginUpgrades(){
     let subMap = {
         milestone: "originMilestonePage",
         theory: "originTheoryPage",
-        upgrade: "originUpgradePage"
+        upgrade: "originUpgradePage",
+        ability: "originAbilityPage"
     };
 
     subNav.addEventListener("click", function(e){

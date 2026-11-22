@@ -121,12 +121,26 @@ function statsKey(){
         ownTheoryUnlocked() ? 1 : 0,           // 你的理论:知识产出新增一行
         theoremUpgradeOwned("propagateI") ? 1 : 0,  // 推广理论I:元-力量产出新增一行
         theoremUpgradeOwned("propagateII") ? 1 : 0, // 推广理论II:行动点获取新增一行
+        theoremUpgradeOwned("propagateIII") ? 1 : 0,// 推广理论III:助手速率新增一行
         ownTheoryTimePower() ? 1 : 0,          // 时光之力:T(t) 行
+        // 抗压能力把 T(t) 变成 T(t)^n,标签要跟着变
+        (typeof abilityTimeExponent === "function")
+            ? abilityTimeExponent() : 1,
         originUpgradeActive("knowledgeExpand") ? 1 : 0,  // 知识扩充:知识边界新增一行
         originUpgradeActive("expBaseBoost") ? 1 : 0,     // 底数提升2:助手速率新增一行
         originUnlocked() ? 1 : 0,                        // 本源获取:整个分组
         originMilestoneActive(30) ? 1 : 0,               // 无尽阶梯II:本源获取新增一行
-        originUpgradeActive("deepOrigin") ? 1 : 0        // 深入本源:本源获取新增一行
+        originUpgradeActive("timeStair") ? 1 : 0,        // 时光之力·阶梯:每秒完成研究次数
+        originUpgradeActive("deepOrigin") ? 1 : 0,       // 深入本源:本源获取新增一行
+        paperRefineActive("refLegacyTheory") ? 1 : 0,    // 精修引用旧理论:标签里的指数变 1.2
+        paperRefineActive("refTheory6") ? 1 : 0,         // 精修引用理论6:标签里的指数变 1.5
+        isEffectUnlocked("ownTheoryGain") ? 1 : 0,        // 元-力量效果8:你的理论力量获取新增一行
+        originUpgradeActive("timeOrigin") ? 1 : 0,        // 时光之力·本源:本源获取新增一行
+        originUpgradeActive("equivalentModel") ? 1 : 0,   // 等效模型:研究阶段加成的底数新增一行
+        originUpgradeActive("timeFlow") ? 1 : 0,          // 时光之力·时流:行动点获取新增一行
+        abilityLevel("creativity"),                       // 创造力:想法价格新增一行
+        abilityLevel("comprehension"),                    // 理解力:理论价格新增一行
+        (abilityLevel("careful") > 0) ? 1 : 0             // 细心:行动点公式指数行
     ].join(":");
 
 }
@@ -238,22 +252,38 @@ function buildStatsHTML(){
         '<div class="stat-line">你的理论:×<span class="stat-val" data-key="ownTheoryK"></span></div>';
     }
 
-    // 你的理论·时光之力:Effect 再 ×T(t)
-    if(ownTheoryTimePower()){
+    // 元-力量效果8(引言已精修 + 118 想法):你的理论力量获取倍率
+    if(isEffectUnlocked("ownTheoryGain")){
         html +=
-        '<div class="stat-line">你的理论·时光之力 T(t):×<span class="stat-val" data-key="ownTheoryT"></span></div>';
+        '<div class="stat-line">元-力量效果8(你的理论力量获取):×<span class="stat-val" data-key="metaEff8"></span></div>';
+    }
+
+    // 你的理论·时光之力:Effect 再 ×T(t)(抗压能力把它变成 T(t)^n)
+    if(ownTheoryTimePower()){
+        let tgExpo =
+        (typeof abilityTimeExponent === "function")
+        ? abilityTimeExponent() : 1;
+        html +=
+        '<div class="stat-line">你的理论·时光之力 ' +
+        (tgExpo === 1 ? "T(t)" : "T(t)^" + tgExpo) +
+        ':×<span class="stat-val" data-key="ownTheoryT"></span></div>';
     }
 
     // 论文"参考文献"系列(第6行):提高理论乘积的指数
-    // 只显示"相对于原指数"的额外倍率(原指数为 1,故 = 乘积^0.1 / 乘积^0.3)
+    // 只显示"相对于原指数"的额外倍率(原指数为 1)
+    // 精修后指数会变(1.1→1.2 / 1.3→1.5),标签跟着当前指数走
     if(paperOwned("refLegacyTheory")){
         html +=
-        '<div class="stat-line">论文·引用旧理论(理论1~5^1.1):×<span class="stat-val" data-key="refLegacyMult"></span></div>';
+        '<div class="stat-line">论文·引用旧理论(理论1~5^' +
+        refLegacyTheoryExponent() +
+        '):×<span class="stat-val" data-key="refLegacyMult"></span></div>';
     }
 
     if(paperOwned("refTheory6")){
         html +=
-        '<div class="stat-line">论文·引用理论6(理论6^1.3):×<span class="stat-val" data-key="refT6Mult"></span></div>';
+        '<div class="stat-line">论文·引用理论6(理论6^' +
+        refTheory6Exponent() +
+        '):×<span class="stat-val" data-key="refT6Mult"></span></div>';
     }
 
     html += '</details>';
@@ -329,6 +359,10 @@ function buildStatsHTML(){
     '<summary>想法价格</summary>' +
     '<div class="stat-line">下个想法价格:<span class="stat-val" data-key="ideaCostVal"></span></div>' +
     '<div class="stat-line">价格膨胀起始点 N:<span class="stat-val" data-key="ideaN"></span>(基础 10 + 实验3效果 <span class="stat-val" data-key="exp3EffectVal"></span>)</div>' +
+    // 能力"创造力":二次项系数 ÷(1+创造力×0.2),膨胀变慢
+    (abilityLevel("creativity") > 0
+        ? '<div class="stat-line">创造力:膨胀系数 ÷<span class="stat-val" data-key="ideaBDiv"></span></div>'
+        : "") +
     // 重复完成实验3:想法花费 ÷completions^10(融入想法价格)
     '<div class="stat-line">重复实验3加成:想法花费 ÷<span class="stat-val" data-key="exp3Div"></span>(完成 <span class="stat-val" data-key="exp3C"></span> 次)</div>' +
     '</details>';
@@ -341,6 +375,10 @@ function buildStatsHTML(){
     '<summary>理论升级价格</summary>' +
     '<div class="stat-line">理论1升级价格:<span class="stat-val" data-key="tUpCost1"></span></div>' +
     '<div class="stat-line">理论1价格膨胀起始等级 N:<span class="stat-val" data-key="tUpN"></span>(基础 ' + t1N + ' + 实验4效果 <span class="stat-val" data-key="exp4EffectVal"></span>)</div>' +
+    // 能力"理解力":二次项系数 ÷(1+理解力×0.2),膨胀变慢
+    (abilityLevel("comprehension") > 0
+        ? '<div class="stat-line">理解力:膨胀系数 ÷<span class="stat-val" data-key="theoryBDiv"></span></div>'
+        : "") +
     '</details>';
 
     // ---------- 行动点获取 ----------
@@ -364,16 +402,34 @@ function buildStatsHTML(){
     }
 
     // 论文"参考文献-引用实验成果":公式指数 0.05 → 0.06
-    if(paperOwned("refExperiment")){
+    // 能力"细心":再 +0.005×细心
+    if(paperOwned("refExperiment") || abilityLevel("careful") > 0){
+
+        let parts = [];
+
+        if(paperOwned("refExperiment"))
+            parts.push("论文·引用实验成果");
+
+        if(abilityLevel("careful") > 0)
+            parts.push("细心");
+
         html +=
         '<div class="stat-line">获取公式指数:<span class="stat-val" data-key="apExp"></span>' +
-        '(基础 <span class="stat-val" data-key="apExpBase"></span> + 论文·引用实验成果)</div>';
+        '(基础 <span class="stat-val" data-key="apExpBase"></span> + ' +
+        parts.join(" + ") + ')</div>';
     }
 
     // 本源层"你的理论":买了「推广理论II」后,行动点获取 ×Effect
     if(theoremUpgradeOwned("propagateII")){
         html +=
         '<div class="stat-line">你的理论(推广理论II):×<span class="stat-val" data-key="ownTheoryAP"></span></div>';
+    }
+
+    // 本源升级"时光之力·时流":每秒自动获得等于上面这个值的行动点
+    if(originUpgradeActive("timeFlow")){
+        html +=
+        '<div class="stat-line">时光之力·时流:每秒 +<span class="stat-val" data-key="apFlowRate"></span>' +
+        ' 行动点(同时计入累计行动点)</div>';
     }
 
     html += '</details>';
@@ -391,11 +447,28 @@ function buildStatsHTML(){
         '<div class="stat-line">研究阶段加成:×<span class="stat-val" data-key="originGainStage"></span>' +
         '(研究阶段 <span class="stat-val" data-key="originGainStageNum"></span>)</div>';
 
+        // 本源升级"等效模型":研究阶段加成的底数与「底数提升1」一致
+        if(originUpgradeActive("equivalentModel")){
+            html +=
+            '<div class="stat-line">研究阶段加成底数:' +
+            '<span class="stat-val" data-key="originStageBaseVal"></span>' +
+            '(与「底数提升1」共用)</div>';
+        }
+
         // 本源里程碑"无尽阶梯II"(完成 30 次研究):× (1 + 完成次数/30)
         if(originMilestoneActive(30)){
             html +=
             '<div class="stat-line">无尽阶梯II:×<span class="stat-val" data-key="originGainStair"></span>' +
-            '(完成研究 <span class="stat-val" data-key="originGainStairN"></span> 次)</div>';
+            '(完成研究 <span class="stat-val" data-key="originGainStairN"></span> 次' +
+            (originUpgradeActive("timeStair") ? ",上限已移除" : "") +
+            ')</div>';
+        }
+
+        // 本源升级"时光之力·阶梯":每秒获得的完成研究次数
+        if(originUpgradeActive("timeStair")){
+            html +=
+            '<div class="stat-line">时光之力·阶梯:每秒 +<span class="stat-val" data-key="stairTimeRate"></span>' +
+            ' 次完成研究</div>';
         }
 
         // 本源升级"深入本源":×2^等级
@@ -403,6 +476,13 @@ function buildStatsHTML(){
             html +=
             '<div class="stat-line">深入本源:×<span class="stat-val" data-key="originGainDeep"></span>' +
             '(等级 <span class="stat-val" data-key="originGainDeepLv"></span>)</div>';
+        }
+
+        // 本源升级"时光之力·本源":× 本次本源重置的秒数(最少 1)
+        if(originUpgradeActive("timeOrigin")){
+            html +=
+            '<div class="stat-line">时光之力·本源:×<span class="stat-val" data-key="originGainTime"></span>' +
+            '(本次 <span class="stat-val" data-key="originGainTimeSec"></span> 秒)</div>';
         }
 
         html += '</details>';
@@ -436,6 +516,12 @@ function buildStatsHTML(){
         html +=
         '<div class="stat-line">里程碑·无尽阶梯:×<span class="stat-val" data-key="endlessStair"></span>' +
         '(研究重置 <span class="stat-val" data-key="endlessResets"></span> 次)</div>';
+    }
+
+    // 你的理论「推广理论III」:实验助手速度 ×Effect
+    if(theoremUpgradeOwned("propagateIII")){
+        html +=
+        '<div class="stat-line">你的理论(推广理论III):×<span class="stat-val" data-key="ownTheoryExp"></span></div>';
     }
 
     // 本源升级"底数提升2":自动实验助手每级的加成底数
@@ -503,23 +589,29 @@ function updateStatVals(){
     if(theoremUpgradeOwned("propagateII"))
         setStat("ownTheoryAP", ownTheoryAPEffect());
 
-    // 论文"参考文献-引用旧理论":理论1~5^1.1 带来的额外倍率(= 乘积^0.1)
+    // 论文"参考文献-引用旧理论":理论1~5^n 带来的额外倍率(= 乘积^(n-1))
     if(paperOwned("refLegacyTheory"))
-        setStat("refLegacyMult", theoryProductLegacy().pow(0.1));
+        setStat("refLegacyMult",
+            theoryProductLegacy().pow(refLegacyTheoryExponent() - 1));
 
-    // 论文"参考文献-引用理论6":理论6^1.3 带来的额外倍率(= 理论6^0.3)
+    // 论文"参考文献-引用理论6":理论6^n 带来的额外倍率(= 理论6^(n-1))
     if(paperOwned("refTheory6"))
-        setStat("refT6Mult", theoryProduct6().pow(0.3));
+        setStat("refT6Mult",
+            theoryProduct6().pow(refTheory6Exponent() - 1));
 
-    // 论文"参考文献-引用实验成果":行动点公式指数
-    if(paperOwned("refExperiment")){
-        setStat("apExp", researchActionExp());
-        setStat("apExpBase", RESEARCH_CONFIG.actionExp);
+    // 论文"参考文献-引用实验成果" / 能力"细心":行动点公式指数
+    if(paperOwned("refExperiment") || abilityLevel("careful") > 0){
+        setStat("apExp", researchActionExp(), 3);
+        setStat("apExpBase", RESEARCH_CONFIG.actionExp, 3);
     }
 
     // 行动点获取:最终值 / 基础值 / 里程碑 stage2 倍率
     setStat("apGain", actionPointsGain());
     setStat("apBase", actionPointsBase());
+
+    // 本源升级"时光之力·时流":每秒行动点(= 一次研究重置的量)
+    if(originUpgradeActive("timeFlow"))
+        setStat("apFlowRate", timeFlowRate());
 
     // 本源获取:最终值 / 基础值(由行动点计算) / 研究阶段加成
     if(originUnlocked()){
@@ -527,6 +619,8 @@ function updateStatVals(){
         setStat("originGainBase", originGainBase());
         setStat("originGainStage", originGainStageMult());
         setStat("originGainStageNum", game.researchStage || 0);
+        if(originUpgradeActive("equivalentModel"))
+            setStat("originStageBaseVal", originStageBase());
     }
 
     // 本源里程碑"无尽阶梯II"
@@ -535,10 +629,20 @@ function updateStatVals(){
         setStat("originGainStairN", originResets());
     }
 
+    // 本源升级"时光之力·阶梯"
+    if(originUpgradeActive("timeStair"))
+        setStat("stairTimeRate", timeStairResetRate());
+
     // 本源升级"深入本源"
     if(originUpgradeActive("deepOrigin")){
         setStat("originGainDeep", deepOriginMult());
         setStat("originGainDeepLv", originUpgradeLevel("deepOrigin"));
+    }
+
+    // 本源升级"时光之力·本源"
+    if(originUpgradeActive("timeOrigin")){
+        setStat("originGainTime", timeOriginMult());
+        setStat("originGainTimeSec", Math.floor(originCycleElapsed()));
     }
 
     if(isMilestoneActive("stage2")){
@@ -600,6 +704,10 @@ function updateStatVals(){
         setStat("metaEff5", metaExpAssistantBonus());
         setStat("metaEff6", metaAPBonus());
         setStat("metaEff7", metaBoundaryBonus());
+
+        // 效果8(引言精修):你的理论力量获取
+        if(isEffectUnlocked("ownTheoryGain"))
+            setStat("metaEff8", metaOwnTheoryBonus());
     }
 
     // 想法价格
@@ -607,10 +715,18 @@ function updateStatVals(){
     setStat("ideaN", IDEA_PRICE.N + exp3Effect());
     setStat("exp3EffectVal", exp3Effect());
 
+    // 能力"创造力":想法价格二次项系数 ÷(1+创造力×0.2)
+    if(abilityLevel("creativity") > 0)
+        setStat("ideaBDiv", ideaBDivisor());
+
     // 理论升级价格(实验4)
     setStat("tUpCost1", theoryUpgradeCost("theory1"));
     setStat("tUpN", getTheoryPrice("theory1").N + exp4Effect());
     setStat("exp4EffectVal", exp4Effect());
+
+    // 能力"理解力":理论价格二次项系数 ÷(1+理解力×0.2)
+    if(abilityLevel("comprehension") > 0)
+        setStat("theoryBDiv", theoryBDivisor());
 
     // 重复完成实验加成(显示实际效果值)
     setStat("exp1C", expCompletions("exp1"));
@@ -643,6 +759,10 @@ function updateStatVals(){
     // 本源升级"底数提升2":每级加成底数
     if(originUpgradeActive("expBaseBoost"))
         setStat("expBaseVal", expAssistantBase());
+
+    // 你的理论「推广理论III」:实验助手速度的倍率
+    if(theoremUpgradeOwned("propagateIII"))
+        setStat("ownTheoryExp", ownTheoryExpAssistantEffect());
 
 }
 
@@ -837,12 +957,13 @@ function renderGameStats(){
 
 
 // 四个实验完成次数总和(自动实验助手/重复完成累计;未解锁实验为 0)
+// 返回 Decimal:单个实验的完成次数可能超过 1e308
 function totalExpCompletions(){
 
-    let total = 0;
+    let total = new Decimal(0);
 
     for(let i = 1; i <= 4; i++)
-        total += expCompletions("exp" + i);
+        total = total.add(expCompletions("exp" + i));
 
     return total;
 
@@ -850,7 +971,7 @@ function totalExpCompletions(){
 
 
 // 设置某个数值文本
-function setStat(key, val){
+function setStat(key, val, digits){
 
     let els =
     document.querySelectorAll(
@@ -859,8 +980,16 @@ function setStat(key, val){
 
     for(let i = 0; i < els.length; i++){
 
-        if(els[i])
-            els[i].innerText = format(val);
+        if(!els[i])
+            continue;
+
+        // digits:需要精确到几位小数时直接 toFixed(指数类数值 0.05 / 0.065…)
+        els[i].innerText =
+        (digits !== undefined
+            && typeof val === "number"
+            && isFinite(val))
+        ? val.toFixed(digits)
+        : format(val);
 
     }
 

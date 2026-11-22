@@ -830,6 +830,138 @@ margin-top:6px;
 
 }
 
+/* 精修:金色(精修后的描述整体换成金色) */
+.paper-card.refined{
+
+border-color:#c8a24a;
+
+}
+
+.paper-desc.refined{
+
+color:#f2ce7a;
+
+}
+
+/* 精修按钮 / 已精修标记 */
+.paper-refine-row{
+
+display:flex;
+
+align-items:center;
+
+justify-content:center;
+
+gap:8px;
+
+flex-wrap:wrap;
+
+margin-top:8px;
+
+}
+
+.paper-refine-btn{
+
+padding:6px 16px;
+
+font-size:13px;
+
+font-weight:bold;
+
+border-radius:8px;
+
+border:1px solid #c8a24a;
+
+background:#3a2f10;
+
+color:#f5d78a;
+
+cursor:pointer;
+
+}
+
+.paper-refine-btn:hover:not(:disabled){
+
+background:#55451a;
+
+}
+
+.paper-refine-btn:disabled{
+
+opacity:0.45;
+
+cursor:default;
+
+}
+
+.paper-refine-done{
+
+font-size:13px;
+
+font-weight:bold;
+
+color:#f5d78a;
+
+border:1px solid #c8a24a;
+
+border-radius:8px;
+
+padding:5px 14px;
+
+background:#2f2710;
+
+}
+
+.paper-refine-cancel{
+
+font-size:12px;
+
+color:#8a9;
+
+background:none;
+
+border:none;
+
+padding:0;
+
+cursor:pointer;
+
+text-decoration:underline;
+
+}
+
+.paper-refine-cancel:hover{
+
+color:#cfd;
+
+}
+
+/* 精修进度(论文升级标题下方,完成过一次文本能力试炼后显示) */
+.paper-refine-count{
+
+text-align:center;
+
+font-size:13px;
+
+color:#f0c46a;
+
+margin:6px 0 2px;
+
+}
+
+/* 精修说明(紧跟精修进度;取消精修的代价 / 不占名额的提示) */
+.paper-refine-hint{
+
+text-align:center;
+
+font-size:12px;
+
+color:#9b8a63;
+
+margin:2px 0;
+
+}
+
 /* 第4行有 4 个升级:收窄方块,保证同排一行且居中
    注:.paper-card 是 content-box(padding 12×2 + border 1×2 = 额外 26px),
    155+26 = 181px/个 → 4 个 + 3 个间距 = 766px,与第3行所需宽度一致 */
@@ -1489,6 +1621,48 @@ background:#aa8a3a;
 
 }
 
+.assistant-sub{
+
+display:flex;
+
+flex-wrap:wrap;
+
+gap:6px;
+
+margin-top:8px;
+
+}
+
+.assistant-btn.sub{
+
+background:#333;
+
+border:1px solid #555;
+
+color:#aaa;
+
+padding:4px 10px;
+
+font-size:13px;
+
+}
+
+.assistant-btn.sub.on{
+
+background:#2a6a4a;
+
+border-color:#4a9a6a;
+
+color:white;
+
+}
+
+.assistant-btn.sub:hover:enabled{
+
+background:#3a8a5e;
+
+}
+
 .assistant-rate{
 
 color:#7fd4a0;
@@ -1838,6 +2012,19 @@ cursor:pointer;
 .theorem-btn:hover:enabled{
 
 background:#24507e;
+
+}
+
+/* 本源升级的"购买最大"(成就「挑战者」解锁):次要操作,金色描边 */
+.theorem-btn.max{
+
+margin-left:8px;
+
+background:#3a2f10;
+
+border-color:#c8a24a;
+
+color:#f5d78a;
 
 }
 
@@ -2768,5 +2955,245 @@ justify-content:center;
 gap:10px;
 
 margin-top:8px;
+
+}
+
+/* ============================================================
+   能力试炼(本源页第四子页)
+   ============================================================ */
+
+/* 游戏界面顶部的试炼提示(与前沿领域提示同位) */
+#trialBanner{
+
+margin:6px 0;
+
+font-size:15px;
+
+font-weight:bold;
+
+color:#ffd479;
+
+}
+
+.ability-card{
+
+background:#101a2a;
+
+border:1px solid #2a4a7a;
+
+border-radius:12px;
+
+padding:12px 18px;
+
+margin:10px auto;
+
+max-width:560px;
+
+text-align:left;
+
+}
+
+.ability-card.active{
+
+border-color:#c88a3a;
+
+}
+
+.ability-head{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+gap:10px;
+
+}
+
+.ability-name{
+
+color:#7fb8f0;
+
+font-weight:bold;
+
+font-size:15px;
+
+}
+
+.ability-level{
+
+color:#9fc4e8;
+
+font-size:14px;
+
+}
+
+.ability-effect{
+
+color:#bbb;
+
+font-size:14px;
+
+margin:6px 0;
+
+}
+
+.ability-effect-text{
+
+color:#8fd0a0;
+
+font-weight:bold;
+
+}
+
+.ability-trial{
+
+margin-top:8px;
+
+padding-top:8px;
+
+border-top:1px dashed #2a4a7a;
+
+}
+
+.ability-trial-title{
+
+color:#e0b070;
+
+font-weight:bold;
+
+font-size:14px;
+
+}
+
+.ability-trial-text{
+
+color:#aaa;
+
+font-size:13px;
+
+line-height:1.7;
+
+margin:4px 0;
+
+}
+
+.ability-target{
+
+color:#9fc4e8;
+
+font-size:14px;
+
+}
+
+.ability-target-val{
+
+color:#7fb8f0;
+
+font-weight:bold;
+
+}
+
+.ability-status{
+
+color:#ffd479;
+
+font-size:13px;
+
+min-height:18px;
+
+padding:4px 0;
+
+}
+
+.ability-btn{
+
+margin-top:6px;
+
+padding:7px 18px;
+
+font-size:14px;
+
+background:#1a3a5e;
+
+border:1px solid #3a7ab8;
+
+color:white;
+
+border-radius:8px;
+
+cursor:pointer;
+
+}
+
+.ability-btn:hover:enabled{
+
+background:#24507e;
+
+}
+
+.ability-btn.ok{
+
+background:#1e4a2e;
+
+border-color:#3a8a5a;
+
+}
+
+.ability-btn.ok:hover:enabled{
+
+background:#2a6240;
+
+}
+
+.ability-btn:disabled{
+
+background:#333;
+
+border-color:#555;
+
+color:#999;
+
+cursor:default;
+
+}
+
+/* 文本试炼:论文升级数量限制 */
+.paper-trial-hint{
+
+color:#ffd479;
+
+font-size:13px;
+
+line-height:1.6;
+
+max-width:640px;
+
+margin:8px auto;
+
+}
+
+.paper-trial-lock{
+
+color:#e0a85c;
+
+font-size:12px;
+
+margin:4px 0;
+
+}
+
+.paper-reset-all{
+
+margin:16px auto;
+
+display:flex;
+
+flex-direction:column;
+
+align-items:center;
+
+gap:4px;
 
 }
